@@ -1,4 +1,4 @@
-package io.morgaroth.media.library
+package io.morgaroth.media.library.jobs
 
 import java.io.File
 
@@ -8,6 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
+import io.morgaroth.media.library.{Args, Configuration}
 import io.morgaroth.media.library.storage.{Track, TracksDB}
 
 import scala.sys.process._
@@ -25,7 +26,7 @@ case class MusicDefinition(
   def info = s"$author - $title"
 }
 
-object Boot extends LazyLogging {
+class Boot extends LazyLogging {
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
 

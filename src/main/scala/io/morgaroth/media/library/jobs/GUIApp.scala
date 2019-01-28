@@ -5,7 +5,7 @@ import io.morgaroth.media.library.gui.{AppWindow, MongoBackedGuiBackend}
 import io.morgaroth.media.library.storage.TracksDB
 import org.gnome.gtk.Gtk
 
-object GUIApp {
+class GUIApp {
   def main(args: Array[String]): Unit = {
     Gtk.init(args)
     val cfg = ConfigFactory.load()

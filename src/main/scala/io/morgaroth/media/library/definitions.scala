@@ -5,6 +5,7 @@ import java.io.File
 import cats.syntax.either._
 import io.circe._
 import io.circe.generic.auto._
+import io.morgaroth.media.library.jobs.MusicDefinition
 
 import scala.io.Source
 

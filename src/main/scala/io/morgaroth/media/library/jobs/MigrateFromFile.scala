@@ -6,7 +6,7 @@ import com.typesafe.config.ConfigFactory
 import io.morgaroth.media.library.YamlParser
 import io.morgaroth.media.library.storage.{Draft, Final, Track, TracksDB}
 
-object MigrateFromFile {
+class MigrateFromFile {
   def main(args: Array[String]): Unit = {
 
     val statuses = Map(true -> Draft, false -> Final)

@@ -3,7 +3,7 @@ package io.morgaroth.media.library
 import java.io.File
 
 case class Configuration(
-                          destinationDir: File = new File("music"),
+                          destinationDir: File = new File(new File(System.getProperty("user.home")), "music-library"),
                           downloaderExec: String = "youtube-dl",
                           force: Boolean = false,
                           forceLevel: Int = 0,
