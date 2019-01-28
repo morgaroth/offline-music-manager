@@ -46,18 +46,22 @@ object Boot extends LazyLogging {
       if (destination.exists() && cfg.forceLevel < 1) {
         logger.info("File {} already downloaded", definition.info)
       } else {
-        val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec).valueOr { x => print(x); throw x }
-        val source = new File(meta._filename)
-        val mp3file = convertToMP3(source, cfg)
-        val trimmed = strip(mp3file, definition)
-        val finalFile = dist(trimmed, destination)
-        addTags(
-          album = "Twórczość",
-          author = definition.artist,
-          title = definition.title,
-          file = finalFile,
-        )
-        logger.info("File {} ready", definition.info)
+        try {
+          val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec).valueOr { x => print(x); throw x }
+          val source = new File(meta._filename)
+          val mp3file = convertToMP3(source, cfg)
+          val trimmed = strip(mp3file, definition)
+          val finalFile = dist(trimmed, destination)
+          addTags(
+            album = "Twórczość",
+            author = definition.artist,
+            title = definition.title,
+            file = finalFile,
+          )
+          logger.info("File {} ready", definition.info)
+        } catch {
+          case t: Throwable => logger.error(s"Error $t during handling ${definition.url}, going forward...")
+        }
       }
     }
   }
@@ -66,10 +70,10 @@ object Boot extends LazyLogging {
     def doWork(retries: Int = 5): String = {
       try {
         Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4",
-          "-o", s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s",
-          url).!!<
+          "-o", s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s", url).!!<
       } catch {
         case e: Throwable if retries > 0 =>
+          logger.warn(s"error during downloading link $url")
           doWork(retries - 1)
       }
     }
