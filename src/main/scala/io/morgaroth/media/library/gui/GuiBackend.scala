@@ -30,6 +30,8 @@ trait GuiBackend {
   def nextDraft: ErrorOr[Option[Track]]
 
   def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track]
+
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track]
 }
 
 class MongoBackedGuiBackend(storage: TracksDB) extends GuiBackend with LazyLogging {
@@ -56,6 +58,8 @@ class MongoBackedGuiBackend(storage: TracksDB) extends GuiBackend with LazyLoggi
   override def updateUrl(id: UUID, url: String) = storage.updateUrl(id, url)
 
   override def updateFadeOutSeconds(id: UUID, newData: Option[Int]) = storage.updateFadeOutSeconds(id, newData)
+
+  override def updateVolumeChange(id: UUID, newData: Option[BigDecimal]) = storage.updateVolumeChange(id, newData)
 
   override def search(text: String, page: Int) = storage.genericSearch(text, page)
 

@@ -6,7 +6,7 @@ import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.storage.{Draft, Final, Track}
-import org.gnome.gdk.{EventButton, MouseButton}
+import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}
 import org.gnome.gtk
 import org.gnome.gtk.{CellRendererText, DataColumnReference, DataColumnString, Gtk, ListStore, TreeView, Widget}
 
@@ -62,12 +62,15 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
   val startAtCheckBtn = Checkbox("").disabled
   val endAtCheckBtn = Checkbox("").disabled
   val fadeCheckBtn = Checkbox("").disabled
+  val volumeCheckBtn = Checkbox("").disabled
   val startAtEdit = Entry().sensitive(false)
   val endAtEdit = Entry().sensitive(false)
   val fadeEdit = Entry().sensitive(false)
+  val volumeEdit = Entry().sensitive(false)
   val startAtSave = Btn("Zapisz").disabled
   val endAtSave = Btn("Zapisz").disabled
   val fadeSave = Btn("Zapisz").disabled
+  val volumeSave = Btn("Zapisz").disabled
   val doneBtn = Btn("Zapisz jako gotowe").disabled
   val draftBtn = Btn("Zapisz jako szkic").disabled
 
@@ -87,6 +90,12 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     fadeEdit.enabled(x)
     fadeSave.enable
     if (!x) fadeEdit.setText("")
+  })
+
+  volumeCheckBtn.onToggle((x, _) => {
+    volumeEdit.enabled(x)
+    volumeSave.enable
+    if (!x) volumeEdit.setText("")
   })
 
   startAtSave.onClick { _ =>
@@ -137,6 +146,22 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     }
   }
 
+  volumeSave.onClick { _ =>
+    trackUnderWork.foreach { track =>
+      val pData = volumeCheckBtn.getActive
+      val v = Option(volumeEdit.getText).filter(_.matches("""^\d+(\.\d+)?$""")).map(BigDecimal(_))
+      if (pData && v.isDefined) {
+        logger.info(s"updating ${track.id}/volumeChange to $v")
+        backend.updateVolumeChange(track.id, v)
+      } else if (!pData) {
+        logger.info(s"removing ${track.id}/volumeChange")
+        backend.updateVolumeChange(track.id, None)
+      } else {
+        logger.warn(s"invalid data checked=$pData, value='$v'")
+      }
+    }
+  }
+
   doneBtn.onClick(_ => trackUnderWork.map { track =>
     backend.updateStatus(track.id, Final)
   }.map(load))
@@ -180,6 +205,13 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     fadeEdit.enabled(fadeOutValue.isDefined)
     fadeSave.enabled(fadeOutValue.isDefined)
 
+    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange)
+    volumeCheckBtn.enabled(trackUnderWork.isDefined)
+    volumeCheckBtn.select(changeVolumeValue.isDefined)
+    volumeEdit.setText(changeVolumeValue.map(_.toString).orEmpty)
+    volumeEdit.enabled(changeVolumeValue.isDefined)
+    volumeSave.enabled(changeVolumeValue.isDefined)
+
     doneBtn.enabled(!trackUnderWork.map(_.status).forall(_ == Final))
     draftBtn.enabled(!trackUnderWork.map(_.status).forall(_ == Draft))
   }
@@ -207,6 +239,7 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     HorizontalLayout(4, L("Opóżniony start"), startAtCheckBtn, startAtEdit, startAtSave),
     HorizontalLayout(4, L("Wcześniejszy koniec"), endAtCheckBtn, endAtEdit, endAtSave),
     HorizontalLayout(4, L("Wyciszanie"), fadeCheckBtn, fadeEdit, fadeSave),
+    HorizontalLayout(4, L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
     HorizontalLayout(10, draftBtn, doneBtn),
     getSearchPane
   ))
@@ -235,9 +268,10 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     val startAtColumn = new DataColumnString()
     val endAtColumn = new DataColumnString()
     val fadeColumn = new DataColumnString()
+    val volumeColumn = new DataColumnString()
     val idColumn = new DataColumnReference[UUID]()
 
-    val resultsStore = new ListStore(Array(artistColumn, titleColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, urlColumn, idColumn))
+    val resultsStore = new ListStore(Array(artistColumn, titleColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
     val input = Entry()
 
     def loadResults(in: Vector[Track]) = {
@@ -252,6 +286,7 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
         resultsStore.setValue(r, startAtColumn, t.startAt.getOrElse(""))
         resultsStore.setValue(r, endAtColumn, t.endAt.getOrElse(""))
         resultsStore.setValue(r, fadeColumn, t.fadeOutSeconds.map(_.toString).getOrElse(""))
+        resultsStore.setValue(r, volumeColumn, t.volumeChange.map(_.toString).getOrElse(""))
         resultsStore.setValue(r, idColumn, t.id)
       }
     }
@@ -284,6 +319,7 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     col("Start", startAtColumn)
     col("Koniec", endAtColumn)
     col("Fade", fadeColumn)
+    col("Volume", volumeColumn)
     col("Url", urlColumn)
 
     val currentPage = Entry("1")
@@ -310,6 +346,16 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     val exec = Btn("Szukaj", _ => {
       currentPage.setText("1")
       loadPage()
+    })
+
+    input.connect(new Widget.KeyReleaseEvent {
+      override def onKeyReleaseEvent(widget: Widget, eventKey: EventKey) = {
+        if (eventKey.getKeyval == Keyval.Return) {
+          currentPage.setText("1")
+          loadPage()
+          true
+        } else false
+      }
     })
 
     pane.add(HorizontalLayout(1, input, exec, HorizontalLayout(1, prev, currentPage, next)))

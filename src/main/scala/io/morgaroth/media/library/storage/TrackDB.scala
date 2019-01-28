@@ -21,6 +21,7 @@ case class Track(
                   startAt: Option[String],
                   endAt: Option[String],
                   fadeOutSeconds: Option[Int],
+                  volumeChange: Option[BigDecimal],
                   status: TrackStatus,
                   idCheck: Option[String],
                   updatedAt: LocalDateTime = LocalDateTime.now(),
@@ -37,7 +38,7 @@ object Track {
              artist: String,
              status: TrackStatus,
            ): Track = {
-    new Track(url, title, artist, none, none, none, status, TrackId(artist, title))
+    new Track(url, title, artist, none, none, none, none, status, TrackId(artist, title))
   }
 
   def apply(
@@ -48,12 +49,13 @@ object Track {
              startAt: Option[String],
              endAt: Option[String],
              fadeOutSeconds: Option[Int],
+             volumeChange: Option[BigDecimal],
            ): Track = {
-    new Track(url, title, artist, startAt, endAt, fadeOutSeconds, status, TrackId(artist, title))
+    new Track(url, title, artist, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title))
   }
 
   def apply(url: String): Track = {
-    new Track(url, "", "", None, None, None, Draft, None)
+    new Track(url, "", "", None, None, None, None, Draft, None)
   }
 }
 
@@ -141,6 +143,10 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
 
   def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track] = {
     updateFields(id, "fadeOutSeconds" -> newData) >> getById(id)
+  }
+
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track] = {
+    updateFields(id, "volumeChange" -> newData) >> getById(id)
   }
 
   def search(

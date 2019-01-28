@@ -17,7 +17,7 @@ class MigrateFromFile {
     val definitions = YamlParser.load(new File("/home/morgaroth/projects/MusicLibrary/definitions.yaml"))
     definitions.foreach { d =>
       val status = statuses(d.draft)
-      val track = Track(d.sourceUrl, d.title, d.author, status, d.startAt, d.endAt, d.fadeOutSeconds)
+      val track = Track(d.sourceUrl, d.title, d.author, status, d.startAt, d.endAt, d.fadeOutSeconds, None)
       db.save(track)
     }
 
