@@ -24,14 +24,14 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
 
   val nextDraft = Btn("Następny skic", _ => {
     backend.nextDraft.map { maybeTrack =>
-      maybeTrack.map { x =>
-        trackUnderWork = x.some
-        println(x)
-      }.getOrElse {
+      maybeTrack.fold {
         trackUnderWork = none
         println("brak szkiców")
         infoWindow.setLabel("nie ma szkiców")
-      }
+      }(x => {
+        trackUnderWork = x.some
+        println(x)
+      })
       loadControls()
     }.left.map { err =>
       println(err)
@@ -104,10 +104,10 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
       val v = Option(startAtEdit.getText).filter(_.matches("""^\d?\d:\d\d$"""))
       if (pData && v.isDefined) {
         logger.info(s"updating ${track.id}/startAt to $v")
-        backend.updateStartAt(track.id, v)
+        load(backend.updateStartAt(track.id, v))
       } else if (!pData) {
         logger.info(s"removing ${track.id}/startAt")
-        backend.updateStartAt(track.id, None)
+        load(backend.updateStartAt(track.id, None))
       } else {
         logger.warn(s"invalid data checked=$pData, value='$v'")
       }
@@ -120,10 +120,10 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
       val v = Option(endAtEdit.getText).filter(_.matches("""^\d?\d:\d\d$"""))
       if (pData && v.isDefined) {
         logger.info(s"updating ${track.id}/endAt to $v")
-        backend.updateEndAt(track.id, v)
+        load(backend.updateEndAt(track.id, v))
       } else if (!pData) {
         logger.info(s"removing ${track.id}/endAt")
-        backend.updateEndAt(track.id, None)
+        load(backend.updateEndAt(track.id, None))
       } else {
         logger.warn(s"invalid data checked=$pData, value='$v'")
       }
@@ -136,10 +136,10 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
       val v = Option(fadeEdit.getText).filter(_.matches("""^\d+$""")).map(_.toInt)
       if (pData && v.isDefined) {
         logger.info(s"updating ${track.id}/fadeOutSeconds to $v")
-        backend.updateFadeOutSeconds(track.id, v)
+        load(backend.updateFadeOutSeconds(track.id, v))
       } else if (!pData) {
         logger.info(s"removing ${track.id}/fadeOutSeconds")
-        backend.updateFadeOutSeconds(track.id, None)
+        load(backend.updateFadeOutSeconds(track.id, None))
       } else {
         logger.warn(s"invalid data checked=$pData, value='$v'")
       }
@@ -151,13 +151,16 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
       val pData = volumeCheckBtn.getActive
       val v = Option(volumeEdit.getText).filter(_.matches("""^\d+(\.\d+)?$""")).map(BigDecimal(_))
       if (pData && v.isDefined) {
-        logger.info(s"updating ${track.id}/volumeChange to $v")
-        backend.updateVolumeChange(track.id, v)
+        val action = s"updating ${track.id}/volumeChange to $v"
+        logger.info(action)
+        load(backend.updateVolumeChange(track.id, v)).left.map(err => logger.warn(s"$action finished with error $err"))
       } else if (!pData) {
-        logger.info(s"removing ${track.id}/volumeChange")
-        backend.updateVolumeChange(track.id, None)
+        val action = s"removing ${track.id}/volumeChange"
+        logger.info(action)
+        load(backend.updateVolumeChange(track.id, None)).left.map(err => logger.warn(s"$action finished with error $err"))
       } else {
         logger.warn(s"invalid data checked=$pData, value='$v'")
+        Right(track)
       }
     }
   }
@@ -198,17 +201,17 @@ class AppWindow(backend: GuiBackend) extends RichGtk with LazyLogging {
     endAtEdit.enabled(endAtValue.isDefined)
     endAtSave.enabled(endAtValue.isDefined)
 
-    val fadeOutValue = trackUnderWork.flatMap(_.fadeOutSeconds)
+    val fadeOutValue = trackUnderWork.flatMap(_.fadeOutSeconds).map(_.toString)
     fadeCheckBtn.enabled(trackUnderWork.isDefined)
     fadeCheckBtn.select(fadeOutValue.isDefined)
-    fadeEdit.setText(fadeOutValue.map(_.toString).orEmpty)
+    fadeEdit.setText(fadeOutValue.orEmpty)
     fadeEdit.enabled(fadeOutValue.isDefined)
     fadeSave.enabled(fadeOutValue.isDefined)
 
-    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange)
+    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange).map(_.toString())
     volumeCheckBtn.enabled(trackUnderWork.isDefined)
     volumeCheckBtn.select(changeVolumeValue.isDefined)
-    volumeEdit.setText(changeVolumeValue.map(_.toString).orEmpty)
+    volumeEdit.setText(changeVolumeValue.orEmpty)
     volumeEdit.enabled(changeVolumeValue.isDefined)
     volumeSave.enabled(changeVolumeValue.isDefined)
 

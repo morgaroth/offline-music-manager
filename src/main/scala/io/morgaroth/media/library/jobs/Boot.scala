@@ -8,8 +8,8 @@ import com.typesafe.scalalogging.LazyLogging
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
-import io.morgaroth.media.library.{Args, Configuration}
 import io.morgaroth.media.library.storage.{Track, TracksDB}
+import io.morgaroth.media.library.{Args, Configuration}
 
 import scala.sys.process._
 
@@ -50,7 +50,7 @@ class Boot extends LazyLogging {
         try {
           val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec).valueOr { x => print(x); throw x }
           val source = new File(meta._filename)
-          val mp3file = convertToMP3(source, cfg)
+          val mp3file = convertToMP3(source, cfg, definition)
           val trimmed = strip(mp3file, definition)
           val finalFile = dist(trimmed, destination)
           addTags(
@@ -86,7 +86,7 @@ class Boot extends LazyLogging {
     }
   }
 
-  def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean = true, debug: Boolean = false) = {
+  def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean = true, debug: Boolean = true) = {
     val logging = if (quiet) Seq("-loglevel", "panic") else Seq.empty
     val sbStdOut = StringBuilder.newBuilder
     val sbStdErr = StringBuilder.newBuilder
@@ -121,17 +121,16 @@ class Boot extends LazyLogging {
     val maxVolumeLine = output.split("\n").filter(_.contains("max_volume:"))
     assert(maxVolumeLine.length == 1)
     val value = maxVolumeLine.head.split(" ")(4)
-    println(value, value.toDouble)
     value.toDouble
   }
 
 
-  def convertToMP3(source: File, config: Configuration) = {
+  def convertToMP3(source: File, config: Configuration, track: Track) = {
     val target = new File(source.getParent, source.getName.split("""\.""").init.mkString + ".mp3")
     if (!target.exists() || config.forceLevel > 1) {
-      val maxVolume = findMaxValue(source)
+      val maxVolume = Option(Option(findMaxValue(source)).map(_ * -1).getOrElse(0d) + track.volumeChange.map(_.toDouble).getOrElse(0d)).filter(_ != 0)
       target.delete()
-      val reVolumeArgs = if (maxVolume < 0) Seq("-af", s"volume=${-maxVolume}dB") else Seq.empty
+      val reVolumeArgs = maxVolume.map(x => Seq("-af", s"volume=${x}dB")).getOrElse(Seq.empty)
       ffmpeg()(source)(reVolumeArgs ++ Seq("-q:a", "0", "-acodec", "libmp3lame"): _*)(target)()
     }
     target
