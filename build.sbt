@@ -11,6 +11,8 @@ scalaVersion := "2.12.7"
 
 val circeVersion = "0.10.0"
 
+resolvers += Resolver.bintrayRepo("morgaroth", "maven")
+
 libraryDependencies ++= Seq(
   "com.github.scopt" %% "scopt" % "3.7.0",
   "ch.qos.logback" % "logback-classic" % "1.2.3",
@@ -18,6 +20,7 @@ libraryDependencies ++= Seq(
   "org.snakeyaml" % "snakeyaml-engine" % "1.0",
   "io.circe" %% "circe-yaml" % "0.9.0",
   "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
+  "io.morgaroth" %% "gnome-scala" % "1.0.3",
 ) ++ Seq(
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser",

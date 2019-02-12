@@ -29,6 +29,7 @@ case class Track(
                   @Key("_id") id: UUID = UUID.randomUUID(),
                 ) {
   lazy val info = s"$artist - $title"
+  lazy val UFID = io.morgaroth.media.library.md5HashString(s"$url$title$artist$startAt$endAt$fadeOutSeconds")
 }
 
 object Track {

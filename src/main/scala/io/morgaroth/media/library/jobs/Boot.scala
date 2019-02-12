@@ -44,7 +44,7 @@ class Boot extends LazyLogging {
   def doAllWork(definitions: Vector[Track], cfg: Configuration) = {
     definitions.foreach { definition =>
       val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
-      if (destination.exists() && cfg.forceLevel < 1) {
+      if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(definition.UFID)) {
         logger.info("File {} already downloaded", definition.info)
       } else {
         try {
@@ -58,6 +58,7 @@ class Boot extends LazyLogging {
             author = definition.artist,
             title = definition.title,
             file = finalFile,
+            id = definition.UFID,
           )
           logger.info("File {} ready", definition.info)
         } catch {
@@ -158,8 +159,12 @@ class Boot extends LazyLogging {
     destination
   }
 
-  def addTags(file: File, author: String, title: String, album: String): Unit = {
-    Seq("mid3v2", file.getAbsolutePath, "-t", title, "-a", author, "-A", album).!!
+  def addTags(file: File, author: String, title: String, album: String, id: String): Unit = {
+    Seq("mid3v2", file.getAbsolutePath, "-t", title, "-a", author, "-A", album, "--UFID", s"definitionhash:$id").!!
+  }
+
+  def getUFIDTag(file: File): Option[String] = {
+    Seq("mid3v2", file.getAbsolutePath, "--list").!!.split("\n").find(_.startsWith("UFID=definitionhash=")).map(_.stripPrefix("UFID=definitionhash=").filterNot(_ == '\'').trim)
   }
 
   def normalizeIt(input: String) = {
