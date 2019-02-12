@@ -27,6 +27,8 @@ case class MusicDefinition(
 }
 
 class Boot extends LazyLogging {
+  val algorithmVersion = "1"
+
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
 
@@ -43,8 +45,9 @@ class Boot extends LazyLogging {
 
   def doAllWork(definitions: Vector[Track], cfg: Configuration) = {
     definitions.foreach { definition =>
+      val versionId = definition.UFID + algorithmVersion
       val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
-      if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(definition.UFID)) {
+      if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId)) {
         logger.info("File {} already downloaded", definition.info)
       } else {
         try {
@@ -58,7 +61,7 @@ class Boot extends LazyLogging {
             author = definition.artist,
             title = definition.title,
             file = finalFile,
-            id = definition.UFID,
+            id = versionId,
           )
           logger.info("File {} ready", definition.info)
         } catch {
@@ -145,7 +148,7 @@ class Boot extends LazyLogging {
     val codecsInfo = definition.fadeOutSeconds.map { secs =>
       val diff1 = b.get.split(":").map(_.toInt)
       val targetTrackSeconds = diff1.head * 3600 + diff1(1) * 60 + diff1(2)
-      Seq("-filter_complex", s"afade=t=out:st=${targetTrackSeconds - secs}:d=$secs", "-q:a", "0", "-acodec", "libmp3lame")
+      Seq("-filter_complex", s"afade=t=out:st=${targetTrackSeconds - secs - 1}:d=$secs", "-q:a", "0", "-acodec", "libmp3lame")
     }.getOrElse(Seq("-acodec", "copy"))
     ffmpeg(a.map("-ss" :: _.toString :: Nil).toSeq.flatten: _*)(source)(
       codecsInfo ++ b.map("-to" :: _.toString :: Nil).toSeq.flatten: _*,
