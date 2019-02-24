@@ -24,12 +24,13 @@ case class Track(
                   volumeChange: Option[BigDecimal],
                   status: TrackStatus,
                   idCheck: Option[String],
+                  playlists: Set[String],
                   updatedAt: LocalDateTime = LocalDateTime.now(),
                   createdAt: LocalDateTime = LocalDateTime.now(),
                   @Key("_id") id: UUID = UUID.randomUUID(),
                 ) {
   lazy val info = s"$artist - $title"
-  lazy val UFID = io.morgaroth.media.library.md5HashString(s"$url$title$artist$startAt$endAt$fadeOutSeconds")
+  lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$startAt$endAt$fadeOutSeconds:$volumeChange")
 }
 
 object Track {
@@ -39,7 +40,7 @@ object Track {
              artist: String,
              status: TrackStatus,
            ): Track = {
-    new Track(url, title, artist, none, none, none, none, status, TrackId(artist, title))
+    new Track(url, title, artist, none, none, none, none, status, TrackId(artist, title), Set.empty)
   }
 
   def apply(
@@ -51,12 +52,13 @@ object Track {
              endAt: Option[String],
              fadeOutSeconds: Option[Int],
              volumeChange: Option[BigDecimal],
+             playlists: Set[String],
            ): Track = {
-    new Track(url, title, artist, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title))
+    new Track(url, title, artist, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists)
   }
 
   def apply(url: String): Track = {
-    new Track(url, "", "", None, None, None, None, Draft, None)
+    new Track(url, "", "", None, None, None, None, Draft, None, Set.empty)
   }
 }
 
@@ -150,6 +152,15 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
     updateFields(id, "volumeChange" -> newData.map(_.toDouble)) >> getById(id)
   }
 
+  def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track] = {
+    updateFields(id, "playlists" -> newData) >> getById(id)
+  }
+
+  def findAllPlaylists(): ErrorOr[Map[String, Vector[Track]]] = {
+    Either.catchNonFatal(dao.find(MongoDBObject("playlists.0" -> MongoDBObject("$exists" -> true))).toVector)
+      .map(_.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
+  }
+
   def search(
               artist: Option[String] = None, title: Option[String] = None,
               statuses: Option[Set[TrackStatus]] = None,
@@ -173,6 +184,7 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
       "artist" -> s"(?i).*$text.*".r,
       "title" -> s"(?i).*$text.*".r,
       "status" -> s"(?i).*$text.*".r,
+      "playlists" -> s"(?i).*$text.*".r,
     ).map(MongoDBObject(_)))
 
     Either.catchNonFatal(dao.find(q).slice((page - 1) * 10, page * 10).toVector)

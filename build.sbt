@@ -1,5 +1,5 @@
 import scala.language.postfixOps
-import sys.process._
+import scala.sys.process._
 
 enablePlugins(JavaAppPackaging, DebianPlugin)
 
@@ -21,6 +21,8 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-yaml" % "0.9.0",
   "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
   "io.morgaroth" %% "gnome-scala" % "1.0.3",
+) ++ Seq(
+  "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
 ) ++ Seq(
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser",
