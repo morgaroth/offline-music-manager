@@ -27,7 +27,7 @@ case class MusicDefinition(
 }
 
 class Boot extends LazyLogging {
-  val algorithmVersion = "1"
+  val algorithmVersion = "2"
 
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
