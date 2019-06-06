@@ -1,18 +1,25 @@
 package io.morgaroth.media.library.storage
 
+import java.time.LocalDateTime
 import java.util.UUID
 
+import cats.data.EitherT
 import cats.implicits._
-import com.mongodb.casbah.Imports
-import com.mongodb.casbah.commons.MongoDBObject
-import com.typesafe.config.Config
+import cats.instances.future.catsStdInstancesForFuture
 import com.typesafe.scalalogging.LazyLogging
-import io.github.morgaroth.utils.mongodb.salat.MongoDAOJodaSupport
 import io.morgaroth.media.library.ErrorOr
-import org.joda.time.LocalDateTime
-import salat.annotations.Key
+import org.mongodb.scala.bson.BsonString
+import org.mongodb.scala.bson.collection.immutable.Document
+import org.mongodb.scala.bson.conversions.Bson
 
-case class TrackNotFound(desc: String) extends Exception(s"track not found $desc")
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+trait TrackDbError
+
+case class TrackNotFound(desc: String) extends Exception(s"track not found $desc") with TrackDbError
+
+case class MongoRawError(err: MongoDBError) extends TrackDbError
 
 case class Track(
                   url: String,
@@ -27,7 +34,7 @@ case class Track(
                   playlists: Set[String],
                   updatedAt: LocalDateTime = LocalDateTime.now(),
                   createdAt: LocalDateTime = LocalDateTime.now(),
-                  @Key("_id") id: UUID = UUID.randomUUID(),
+                  id: UUID = UUID.randomUUID(),
                 ) {
   lazy val info = s"$artist - $title"
   lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$startAt$endAt$fadeOutSeconds:$volumeChange")
@@ -69,46 +76,56 @@ object TrackId {
     if (title.nonEmpty || artist.nonEmpty) s"$artist$sep$title".some else none
 }
 
-class TracksDB(val connectionCfg: Config) extends LazyLogging {
-  def all: Vector[Track] = dao.find(MongoDBObject.empty).toVector
+class TracksDB(val dao: MyMongoCollection) extends LazyLogging {
 
-  UUIDConversionHelpers.register()
+  //  private val dao = new MongoDAOJodaSupport[Track](connectionCfg, "Tracks")
+  //  dao.collection.createIndex("id")
+  //  dao.collection.createIndex(
+  //    MongoDBObject("idCheck" -> 1),
+  //    MongoDBObject(
+  //      "partialFilterExpression" -> MongoDBObject("idCheck" -> MongoDBObject("$exists" -> true)),
+  //      "unique" -> true,
+  //    )
+  //  )
+  //
+  //  UUIDConversionHelpers.register()
 
-  private val dao = new MongoDAOJodaSupport[Track](connectionCfg, "Tracks")
-  dao.collection.createIndex("id")
-  dao.collection.createIndex(
-    MongoDBObject("idCheck" -> 1),
-    MongoDBObject(
-      "partialFilterExpression" -> MongoDBObject("idCheck" -> MongoDBObject("$exists" -> true)),
-      "unique" -> true,
+  def extract(doc: Document) = {
+    Track(
+      url = doc.getString("url"),
+      title = doc.getString("title"),
+      artist = doc.getString("artist"),
+      startAt = doc.getString("startAt"),
     )
-  )
+  }
 
+  def all: EitherT[Future, MongoDBError, Vector[Document]] = dao.find(Document())
 
-  def getById(id: UUID): ErrorOr[Track] =
-    Either.catchNonFatal(dao.findOne(MongoDBObject("_id" -> id))).flatMap(
-      _.map(_.asRight).getOrElse(TrackNotFound(s"by id $id").asLeft)
-    )
+  def getById(id: UUID): EitherT[Future, TrackDbError, Document] =
+    dao
+      .findOne(Document("_id" -> BsonString(id.toString)))
+      .leftMap(MongoRawError)
+      .subflatMap(_.map(_.asRight).getOrElse(TrackNotFound(s"by id $id").asLeft))
 
-  def getBy(artist: String, title: String): ErrorOr[Track] =
-    Either.catchNonFatal(dao.findOne(MongoDBObject("artist" -> artist, "title" -> title))).flatMap(
-      _.map(_.asRight).getOrElse(TrackNotFound(s"by artist/title $artist/$title").asLeft)
-    )
+  //  def getBy(artist: String, title: String): ErrorOr[Track] =
+  //    Either.catchNonFatal(dao.findOne(MongoDBObject("artist" -> artist, "title" -> title))).flatMap(
+  //      _.map(_.asRight).getOrElse(TrackNotFound(s"by artist/title $artist/$title").asLeft)
+  //    )
 
   def save(document: Track): ErrorOr[Track] = {
-    Either.catchNonFatal(dao.save(document)).flatMap(_ => getById(document.id))
+    Either.catchNonFatal(dao.insert(document)).flatMap(_ => getById(document.id))
   }
 
   def store(url: String): ErrorOr[Track] = save(Track(url))
 
-  private def updateFields(id: UUID, kv: (String, AnyRef), kvRest: (String, AnyRef)*): ErrorOr[Imports.WriteResult] = {
-    val updateQuery = MongoDBObject(kv._1 -> kv._2)
-    kvRest.foreach(x => updateQuery.put(x._1, x._2))
+  private def updateFields(id: UUID, kv: Bson, kvRest: Bson*) = {
+    import org.mongodb.scala.model.Updates._
 
-    Either.catchNonFatal(dao.update(
-      MongoDBObject("_id" -> id),
-      MongoDBObject("$set" -> updateQuery),
-      upsert = false
+    val a = combine(kv +: kvRest: _*)
+
+    Either.catchNonFatal(dao.updateOne(
+      Document("_id" -> BsonString(id.toString)),
+      a,
     )).flatMap(x => if (x.getN == 0) TrackNotFound(s"by id $id").asLeft else x.asRight)
   }
 
