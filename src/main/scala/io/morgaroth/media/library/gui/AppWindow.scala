@@ -1,10 +1,11 @@
 package io.morgaroth.media.library.gui
 
+import java.net.URLEncoder
 import java.util.UUID
 
-import io.morgaroth.gnome.scala._
 import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
+import io.morgaroth.gnome.scala._
 import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.storage.{Draft, Final, Track}
 import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}
@@ -20,9 +21,9 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val windowWidth = 1200
   private val windowHeight = 800
   w.setDefaultSize(windowWidth, windowHeight)
-  val infoWindow = L("")
+  private val infoWindow = L("")
 
-  val nextDraft = Btn("Następny skic").onClick(_ => {
+  private val nextDraft = Btn("Następny skic").onClick(_ => {
     backend.nextDraft.map { maybeTrack =>
       maybeTrack.fold {
         trackUnderWork = none
@@ -39,40 +40,50 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     }
   })
 
-  val urlEdit = Edit().disabled
-  val titleEdit = Edit().disabled
-  val artistEdit = Edit().disabled
+  private val urlEdit = Edit().disabled
+  private val titleEdit = Edit().disabled
+  private val artistEdit = Edit().disabled
+  private val albumEdit = Edit().disabled
 
-  val updateUrlBtn = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    urlEdit.getText.some.filter(_ != track.url).map(backend.updateUrl(track.id, _)).map(load)
+  private val updateUrlBtn = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
+    urlEdit.getText.trim.some.filter(_ != track.url).map(backend.updateUrl(track.id, _)).map(load)
   }).disabled
 
-  val openBtn = Btn("Otwórz!").onClick(_ => trackUnderWork.foreach {
+  private val openBtn = Btn("Otwórz!").onClick(_ => trackUnderWork.foreach {
     track => s"google-chrome ${track.url}".!
   }).disabled
 
-  val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    artistEdit.getText.some.filter(_ != track.artist).map(backend.updateArtist(track.id, _)).map(load)
+  private val searchYTBtn = Btn("Szukaj w YT!").onClick(_ => trackUnderWork.foreach { track =>
+    val query = URLEncoder.encode(s"${track.title} ${track.artist}", "utf-8")
+    s"google-chrome https://www.youtube.com/results?search_query=$query".!
   }).disabled
 
-  val titleSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    titleEdit.getText.some.filter(_ != track.title).map(backend.updateTitle(track.id, _)).map(load)
+  private val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
+    artistEdit.getText.trim.some.filter(_ != track.artist).map(backend.updateArtist(track.id, _)).map(load)
   }).disabled
 
-  val startAtCheckBtn = Checkbox("").disabled
-  val endAtCheckBtn = Checkbox("").disabled
-  val fadeCheckBtn = Checkbox("").disabled
-  val volumeCheckBtn = Checkbox("").disabled
-  val startAtEdit = Edit().disabled
-  val endAtEdit = Edit().disabled
-  val fadeEdit = Edit().disabled
-  val volumeEdit = Edit().disabled
-  val startAtSave = Btn("Zapisz").disabled
-  val endAtSave = Btn("Zapisz").disabled
-  val fadeSave = Btn("Zapisz").disabled
-  val volumeSave = Btn("Zapisz").disabled
-  val doneBtn = Btn("Zapisz jako gotowe").disabled
-  val draftBtn = Btn("Zapisz jako szkic").disabled
+  private val albumSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
+    albumEdit.getText.trim.some.filter(_ != track.album).map(backend.updateAlbum(track.id, _)).map(load)
+  }).disabled
+
+  private val titleSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
+    titleEdit.getText.trim.some.filter(_ != track.title).map(backend.updateTitle(track.id, _)).map(load)
+  }).disabled
+
+  private val startAtCheckBtn = Checkbox("").disabled
+  private val endAtCheckBtn = Checkbox("").disabled
+  private val fadeCheckBtn = Checkbox("").disabled
+  private val volumeCheckBtn = Checkbox("").disabled
+  private val startAtEdit = Edit().disabled
+  private val endAtEdit = Edit().disabled
+  private val fadeEdit = Edit().disabled
+  private val volumeEdit = Edit().disabled
+  private val startAtSave = Btn("Zapisz").disabled
+  private val endAtSave = Btn("Zapisz").disabled
+  private val fadeSave = Btn("Zapisz").disabled
+  private val volumeSave = Btn("Zapisz").disabled
+  private val doneBtn = Btn("Zapisz jako gotowe").disabled
+  private val draftBtn = Btn("Zapisz jako szkic").disabled
 
   startAtCheckBtn.onToggle((x, _) => {
     startAtEdit.enable(x)
@@ -173,11 +184,12 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     backend.updateStatus(track.id, Draft)
   }.map(load))
 
-  def loadControls() = {
+  private def loadControls() = {
     urlEdit.setText(trackUnderWork.orEmpty(_.url))
     urlEdit.enable(trackUnderWork.isDefined)
     updateUrlBtn.enable(trackUnderWork.isDefined)
     openBtn.enable(trackUnderWork.isDefined)
+    searchYTBtn.enable(trackUnderWork.isDefined)
 
     titleEdit.setText(trackUnderWork.orEmpty(_.title))
     titleEdit.enable(trackUnderWork.isDefined)
@@ -186,6 +198,10 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     artistEdit.setText(trackUnderWork.orEmpty(_.artist))
     artistEdit.enable(trackUnderWork.isDefined)
     artistSave.enable(trackUnderWork.isDefined)
+
+    albumEdit.setText(trackUnderWork.orEmpty(_.album))
+    albumEdit.enable(trackUnderWork.isDefined)
+    albumSave.enable(trackUnderWork.isDefined)
 
     val startAtValue = trackUnderWork.flatMap(_.startAt)
     startAtCheckBtn.enable(trackUnderWork.isDefined)
@@ -208,20 +224,20 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     fadeEdit.enable(fadeOutValue.isDefined)
     fadeSave.enable(fadeOutValue.isDefined)
 
-//    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange).map(_.toString())
-//    volumeCheckBtn.enable(trackUnderWork.isDefined)
-//    volumeCheckBtn.select(changeVolumeValue.isDefined)
-//    volumeEdit.setText(changeVolumeValue.orEmpty)
-//    volumeEdit.enable(changeVolumeValue.isDefined)
-//    volumeSave.enable(changeVolumeValue.isDefined)
+    //    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange).map(_.toString())
+    //    volumeCheckBtn.enable(trackUnderWork.isDefined)
+    //    volumeCheckBtn.select(changeVolumeValue.isDefined)
+    //    volumeEdit.setText(changeVolumeValue.orEmpty)
+    //    volumeEdit.enable(changeVolumeValue.isDefined)
+    //    volumeSave.enable(changeVolumeValue.isDefined)
 
     doneBtn.enable(!trackUnderWork.map(_.status).forall(_ == Final))
     draftBtn.enable(!trackUnderWork.map(_.status).forall(_ == Draft))
   }
 
-  val storeUrl = Edit()
-  val storeBtn = Btn("Zapisz!").onClick(_ => {
-    storeUrl.getText.some.filter(_.nonEmpty).foreach { data =>
+  private val storeUrl = Edit()
+  private val storeBtn = Btn("Zapisz!").onClick(_ => {
+    storeUrl.getText.trim.some.filter(_.nonEmpty).foreach { data =>
       backend.storeUrl(data).fold(
         err => infoWindow.setLabel(s"ERROR: $err"),
         track => {
@@ -236,13 +252,14 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   w.add(VerticalLayout(
     HorizontalLayout(storeUrl, storeBtn),
     nextDraft,
-    HorizontalLayout(L("Link"), urlEdit, updateUrlBtn, openBtn),
+    HorizontalLayout(HorizontalLayout(L("Link"), urlEdit), HorizontalLayout(updateUrlBtn, openBtn, searchYTBtn)),
     HorizontalLayout(L("Twórca"), artistEdit, artistSave),
     HorizontalLayout(L("Tytuł"), titleEdit, titleSave),
+    HorizontalLayout(L("Album"), albumEdit, albumSave),
     HorizontalLayout(L("Opóżniony start"), startAtCheckBtn, startAtEdit, startAtSave),
     HorizontalLayout(L("Wcześniejszy koniec"), endAtCheckBtn, endAtEdit, endAtSave),
     HorizontalLayout(L("Wyciszanie"), fadeCheckBtn, fadeEdit, fadeSave),
-//    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
+    //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
     HorizontalLayout(draftBtn, doneBtn),
     getSearchPane
   ))
@@ -251,7 +268,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
 
   w.closeOnDeleteEvent()
 
-  def show() = {
+  def show() {
     Gtk.main()
   }
 
@@ -266,6 +283,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
 
     val artistColumn = new DataColumnString()
     val titleColumn = new DataColumnString()
+    val albumColumn = new DataColumnString()
     val urlColumn = new DataColumnString()
     val statusColumn = new DataColumnString()
     val startAtColumn = new DataColumnString()
@@ -274,16 +292,17 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     val volumeColumn = new DataColumnString()
     val idColumn = new DataColumnReference[UUID]()
 
-    val resultsStore = new ListStore(Array(artistColumn, titleColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
+    val resultsStore = new ListStore(Array(artistColumn, titleColumn,albumColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
     val input = Edit()
 
-    def loadResults(in: Vector[Track]) = {
+    def loadResults(in: Vector[Track]) {
       logger.info(s"search result is $in")
       resultsStore.clear()
       in.foreach { t =>
         val r = resultsStore.appendRow()
         resultsStore.setValue(r, artistColumn, t.artist)
         resultsStore.setValue(r, titleColumn, t.title)
+        resultsStore.setValue(r, albumColumn, t.album)
         resultsStore.setValue(r, urlColumn, t.url)
         resultsStore.setValue(r, statusColumn, t.status.dbRepr)
         resultsStore.setValue(r, startAtColumn, t.startAt.getOrElse(""))
@@ -309,7 +328,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
       }
     })
 
-    def col(name: String, col: DataColumnString) = {
+    def col(name: String, col: DataColumnString) {
       val column = view.appendColumn()
       column.setTitle(name)
       val renderer = new CellRendererText(column)
@@ -318,6 +337,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
 
     col("Twórca", artistColumn)
     col("Tytuł", titleColumn)
+    col("Album", albumColumn)
     col("Stan", statusColumn)
     col("Start", startAtColumn)
     col("Koniec", endAtColumn)

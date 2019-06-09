@@ -7,6 +7,7 @@ case class Configuration(
                           downloaderExec: String = "youtube-dl",
                           force: Boolean = false,
                           forceLevel: Int = 0,
+                          debug: Boolean= false,
                         ) {
   def cacheLocation = new File(destinationDir, "cache")
 

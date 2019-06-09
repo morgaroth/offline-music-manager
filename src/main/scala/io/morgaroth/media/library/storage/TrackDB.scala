@@ -18,19 +18,20 @@ case class Track(
                   url: String,
                   title: String,
                   artist: String,
+                  album: String,
                   startAt: Option[String],
                   endAt: Option[String],
                   fadeOutSeconds: Option[Int],
                   volumeChange: Option[BigDecimal],
                   status: TrackStatus,
                   idCheck: Option[String],
-                  playlists: Set[String],
+                  playlists: Set[String] = Set.empty,
                   updatedAt: LocalDateTime = LocalDateTime.now(),
                   createdAt: LocalDateTime = LocalDateTime.now(),
                   @Key("_id") id: UUID = UUID.randomUUID(),
                 ) {
   lazy val info = s"$artist - $title"
-  lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$startAt$endAt$fadeOutSeconds:$volumeChange")
+  lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$album$startAt$endAt$fadeOutSeconds:$volumeChange")
 }
 
 object Track {
@@ -40,13 +41,24 @@ object Track {
              artist: String,
              status: TrackStatus,
            ): Track = {
-    new Track(url, title, artist, none, none, none, none, status, TrackId(artist, title), Set.empty)
+    apply(url, title, artist, "", status)
   }
 
   def apply(
              url: String,
              title: String,
              artist: String,
+             album: String,
+             status: TrackStatus,
+           ): Track = {
+    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Set.empty)
+  }
+
+  def apply(
+             url: String,
+             title: String,
+             artist: String,
+             album: String,
              status: TrackStatus,
              startAt: Option[String],
              endAt: Option[String],
@@ -54,11 +66,11 @@ object Track {
              volumeChange: Option[BigDecimal],
              playlists: Set[String],
            ): Track = {
-    new Track(url, title, artist, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists)
+    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists)
   }
 
   def apply(url: String): Track = {
-    new Track(url, "", "", None, None, None, None, Draft, None, Set.empty)
+    new Track(url, "", "", "", None, None, None, None, Draft, None, Set.empty)
   }
 }
 
@@ -126,6 +138,10 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
       _ <- updateFields(id, "title" -> title, "idCheck" -> TrackId(db.artist, title).get)
       res <- getById(id)
     } yield res
+  }
+
+  def updateAlbum(id: UUID, album: String): ErrorOr[Track] = {
+    updateFields(id, "album" -> album) >> getById(id)
   }
 
   def updateStartAt(id: UUID, data: Option[String]): ErrorOr[Track] = {

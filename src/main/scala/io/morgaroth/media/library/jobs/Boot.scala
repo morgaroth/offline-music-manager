@@ -3,8 +3,10 @@ package io.morgaroth.media.library.jobs
 import java.io.File
 
 import cats.syntax.either._
+import cats.syntax.option._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.circe
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
@@ -27,7 +29,7 @@ case class MusicDefinition(
 }
 
 class Boot extends LazyLogging {
-  val algorithmVersion = "2"
+  val algorithmVersion = "3"
 
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
@@ -43,7 +45,7 @@ class Boot extends LazyLogging {
 
   }
 
-  def doAllWork(definitions: Vector[Track], cfg: Configuration) = {
+  private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
     definitions.foreach { definition =>
       val versionId = definition.UFID + algorithmVersion
       val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
@@ -51,13 +53,13 @@ class Boot extends LazyLogging {
         logger.info("File {} already downloaded", definition.info)
       } else {
         try {
-          val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec).valueOr { x => print(x); throw x }
+          val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug).valueOr { x => print(x); throw x }
           val source = new File(meta._filename)
           val mp3file = convertToMP3(source, cfg, definition)
-          val trimmed = strip(mp3file, definition)
+          val trimmed = strip(mp3file, definition, cfg.debug)
           val finalFile = dist(trimmed, destination)
           addTags(
-            album = "Twórczość",
+            album = definition.album.some.filter(_.nonEmpty).getOrElse("Twórczość"),
             author = definition.artist,
             title = definition.title,
             file = finalFile,
@@ -71,11 +73,15 @@ class Boot extends LazyLogging {
     }
   }
 
-  def download(url: String, dest: File, downloaderExec: String) = {
+  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false): Either[circe.Error, YoutubeDLMeta] = {
     def doWork(retries: Int = 5): String = {
       try {
-        Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4",
-          "-o", s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s", url).!!<
+        val args = Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4",
+          "-o", s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s", url)
+        if (debug) {
+          logger.debug("--> {}", args.mkString(" "))
+        }
+        args.!!<
       } catch {
         case e: Throwable if retries > 0 =>
           logger.warn(s"error during downloading link $url")
@@ -90,7 +96,7 @@ class Boot extends LazyLogging {
     }
   }
 
-  def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean = true, debug: Boolean = true) = {
+  private def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean, debug: Boolean) = {
     val logging = if (quiet) Seq("-loglevel", "panic") else Seq.empty
     val sbStdOut = StringBuilder.newBuilder
     val sbStdErr = StringBuilder.newBuilder
@@ -120,8 +126,8 @@ class Boot extends LazyLogging {
     }
   }
 
-  def findMaxValue(file: File) = {
-    val output = ffmpeg()(file)("-af", "volumedetect", "-sn", "-dn", "-f", "null")(new File("/dev/null"))(quiet = false)
+  private def findMaxValue(file: File, debug: Boolean) = {
+    val output = ffmpeg()(file)("-af", "volumedetect", "-sn", "-dn", "-f", "null")(new File("/dev/null"))(quiet = false, debug)
     val maxVolumeLine = output.split("\n").filter(_.contains("max_volume:"))
     assert(maxVolumeLine.length == 1)
     val value = maxVolumeLine.head.split(" ")(4)
@@ -129,18 +135,18 @@ class Boot extends LazyLogging {
   }
 
 
-  def convertToMP3(source: File, config: Configuration, track: Track) = {
+  private def convertToMP3(source: File, config: Configuration, track: Track) = {
     val target = new File(source.getParent, source.getName.split("""\.""").init.mkString + ".mp3")
     if (!target.exists() || config.forceLevel > 1) {
-      val maxVolume = Option(Option(findMaxValue(source)).map(_ * -1).getOrElse(0d) + track.volumeChange.map(_.toDouble).getOrElse(0d)).filter(_ != 0)
+      val maxVolume = Option(Option(findMaxValue(source, config.debug)).map(_ * -1).getOrElse(0d) + track.volumeChange.map(_.toDouble).getOrElse(0d)).filter(_ != 0)
       target.delete()
       val reVolumeArgs = maxVolume.map(x => Seq("-af", s"volume=${x}dB")).getOrElse(Seq.empty)
-      ffmpeg()(source)(reVolumeArgs ++ Seq("-q:a", "0", "-acodec", "libmp3lame"): _*)(target)()
+      ffmpeg()(source)(reVolumeArgs ++ Seq("-q:a", "0", "-acodec", "libmp3lame"): _*)(target)(quiet = true, debug = config.debug)
     }
     target
   }
 
-  def strip(source: File, definition: Track) = {
+  private def strip(source: File, definition: Track, debug: Boolean) = {
     val t1 = new File(source.getParentFile, "TMP - " + source.getName)
     t1.delete()
     t1.deleteOnExit()
@@ -152,11 +158,11 @@ class Boot extends LazyLogging {
     }.getOrElse(Seq("-acodec", "copy"))
     ffmpeg(a.map("-ss" :: _.toString :: Nil).toSeq.flatten: _*)(source)(
       codecsInfo ++ b.map("-to" :: _.toString :: Nil).toSeq.flatten: _*,
-    )(t1)()
+    )(t1)(true, debug)
     t1
   }
 
-  def dist(source: File, destination: File) = {
+  private def dist(source: File, destination: File) = {
     destination.delete()
     assert(source.renameTo(destination), "cannot move")
     destination
@@ -170,7 +176,7 @@ class Boot extends LazyLogging {
     Seq("mid3v2", file.getAbsolutePath, "--list").!!.split("\n").find(_.startsWith("UFID=definitionhash=")).map(_.stripPrefix("UFID=definitionhash=").filterNot(_ == '\'').trim)
   }
 
-  def normalizeIt(input: String) = {
+  private def normalizeIt(input: String) = {
     val result = input.split(":").toList match {
       case Nil => throw new IllegalArgumentException("invalid data in input")
       case singleSeconds :: Nil => "00:00:" + s"0$singleSeconds".takeRight(2)

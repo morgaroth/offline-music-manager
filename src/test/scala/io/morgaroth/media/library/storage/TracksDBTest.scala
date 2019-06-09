@@ -46,7 +46,7 @@ class TracksDBTest extends FlatSpec with Matchers with MongoSupport[TracksDB] wi
 
 
   def genTrack(num: Int, status: TrackStatus = Final, playlists: Set[String] = Set.empty) = {
-    Track(s"url-$num", s"title-$num", s"artist-$num", status, None, None, None, None, playlists)
+    Track(s"url-$num", s"title-$num", s"artist-$num", s"album-$num", status, None, None, None, None, playlists)
   }
 
   def store(num: Int, status: TrackStatus = Final, playlists: Set[String] = Set.empty) = {
