@@ -6,7 +6,6 @@ import cats.syntax.either._
 import cats.syntax.option._
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import io.circe
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
@@ -52,8 +51,7 @@ class Boot extends LazyLogging {
         logger.info("File {} already downloaded", definition.info)
       } else {
         try {
-          val meta = download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug).valueOr { x => print(x); throw x }
-          val source = new File(meta._filename)
+          val source = download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug).valueOr { x => print(x); throw x }
           val mp3file = convertToMP3(source, cfg, definition)
           val trimmed = strip(mp3file, definition, cfg.debug)
           val finalFile = dist(trimmed, destination)
@@ -72,27 +70,39 @@ class Boot extends LazyLogging {
     }
   }
 
-  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false): Either[circe.Error, YoutubeDLMeta] = {
-    def doWork(retries: Int = 5): String = {
+  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false): Either[Exception, File] = {
+    def doWork(retries: Int = 5): Either[Exception, File] = {
       try {
-        val args = Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4",
-          "-o", s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s", url)
-        if (debug) {
-          logger.debug("--> {}", args.mkString(" "))
+        val format = s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s"
+        val destinationFilePath = Seq(downloaderExec, "--get-filename", "-f", "mp4", "-o", format, url).!!<
+        val destFile = new File(destinationFilePath)
+        if (destFile.exists()) {
+          logger.info(s"Using previously downloaded file $destFile.")
+          destFile.asRight
+        } else {
+          val args = Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4", "-o", format, url)
+          if (debug) {
+            logger.debug("--> {}", args.mkString(" "))
+          }
+          val json = args.!!<
+          decode[YoutubeDLMeta](json).left.map {
+            case c: DecodingFailure => c.copy(message = json)
+            case e => e
+          }.map(x => new File(x._filename))
         }
-        args.!!<
       } catch {
-        case e: Throwable if retries > 0 =>
+        case _: Throwable if retries > 0 =>
           logger.warn(s"error during downloading link $url")
           doWork(retries - 1)
       }
     }
 
-    val json = doWork()
-    decode[YoutubeDLMeta](json).left.map {
-      case c: DecodingFailure => c.copy(message = json)
-      case e => e
-    }
+    doWork()
+    //    decode[YoutubeDLMeta](json).left.map {
+    //      case c: DecodingFailure => c.copy(message = json)
+    //      case e => e
+    //    }
+
   }
 
   private def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean, debug: Boolean) = {
