@@ -17,6 +17,9 @@ import scala.sys.process._
 class AppWindow(backend: GuiBackend) extends LazyLogging {
   var trackUnderWork: Option[Track] = None
 
+  private val singleDigit = """\s*(\d)\s*""".r
+  private val twoDigits = """\s*(\d\d)\s*""".r
+
   val w = new gtk.Window
   private val windowWidth = 1200
   private val windowHeight = 800
@@ -112,15 +115,19 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   startAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
       val pData = startAtCheckBtn.getActive
-      val v = Option(startAtEdit.getText).filter(_.matches("""^\d?\d:\d\d$"""))
-      if (pData && v.isDefined) {
-        logger.info(s"updating ${track.id}/startAt to $v")
-        load(backend.updateStartAt(track.id, v))
+      val finalValue = Option(startAtEdit.getText).map(_.trim).map {
+        case singleDigit(seconds) => s"0:0$seconds"
+        case twoDigits(seconds) => s"0:$seconds"
+        case another => another
+      }.filter(_.matches("""^\d?\d:\d\d$"""))
+      if (pData && finalValue.isDefined) {
+        logger.info(s"updating ${track.id}/startAt to $finalValue")
+        load(backend.updateStartAt(track.id, finalValue))
       } else if (!pData) {
         logger.info(s"removing ${track.id}/startAt")
         load(backend.updateStartAt(track.id, None))
       } else {
-        logger.warn(s"invalid data checked=$pData, value='$v'")
+        logger.warn(s"invalid data checked=$pData, value='$finalValue' (raw input: ${Option(startAtEdit.getText)})")
       }
     }
   }
@@ -128,7 +135,11 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   endAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
       val pData = endAtCheckBtn.getActive
-      val v = Option(endAtEdit.getText).filter(_.matches("""^\d?\d:\d\d$"""))
+      val v = Option(endAtEdit.getText).map {
+        case singleDigit(seconds) => s"0:0$seconds"
+        case twoDigits(seconds) => s"0:$seconds"
+        case another => another
+      }.filter(_.matches("""^\d?\d:\d\d$"""))
       if (pData && v.isDefined) {
         logger.info(s"updating ${track.id}/endAt to $v")
         load(backend.updateEndAt(track.id, v))
@@ -292,7 +303,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     val volumeColumn = new DataColumnString()
     val idColumn = new DataColumnReference[UUID]()
 
-    val resultsStore = new ListStore(Array(artistColumn, titleColumn,albumColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
+    val resultsStore = new ListStore(Array(artistColumn, titleColumn, albumColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
     val input = Edit()
 
     def loadResults(in: Vector[Track]) {

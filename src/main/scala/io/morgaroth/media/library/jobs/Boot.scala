@@ -143,7 +143,6 @@ class Boot extends LazyLogging {
     value.toDouble
   }
 
-
   private def convertToMP3(source: File, config: Configuration, track: Track) = {
     val target = new File(source.getParent, source.getName.split("""\.""").init.mkString + ".mp3")
     if (!target.exists() || config.forceLevel > 1) {
