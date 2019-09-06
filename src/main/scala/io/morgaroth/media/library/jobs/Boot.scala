@@ -29,7 +29,7 @@ case class MusicDefinition(
 }
 
 class Boot extends LazyLogging {
-  val algorithmVersion = "3"
+  val algorithmVersion = "4"
 
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
@@ -39,8 +39,7 @@ class Boot extends LazyLogging {
     val storage = new TracksDB(mongoCfg)
     val cfg = Args(args).get
     println(cfg)
-    //    val definitions: Vector[MusicDefinition] = YamlParser.load(cfg.definitionsFile)
-    val definitions = storage.all
+    val definitions = storage.all.filter(_.isReadyToFetch).sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
     doAllWork(definitions, cfg)
 
   }
@@ -154,7 +153,7 @@ class Boot extends LazyLogging {
     val codecsInfo = definition.fadeOutSeconds.map { secs =>
       val diff1 = b.get.split(":").map(_.toInt)
       val targetTrackSeconds = diff1.head * 3600 + diff1(1) * 60 + diff1(2)
-      Seq("-filter_complex", s"afade=t=out:st=${targetTrackSeconds - secs - 1}:d=$secs", "-q:a", "0", "-acodec", "libmp3lame")
+      Seq("-filter_complex", s"afade=t=out:st=${targetTrackSeconds - secs}:d=$secs", "-q:a", "0", "-acodec", "libmp3lame")
     }.getOrElse(Seq("-acodec", "copy"))
     ffmpeg(a.map("-ss" :: _.toString :: Nil).toSeq.flatten: _*)(source)(
       codecsInfo ++ b.map("-to" :: _.toString :: Nil).toSeq.flatten: _*,

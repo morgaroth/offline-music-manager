@@ -30,6 +30,9 @@ case class Track(
                   createdAt: LocalDateTime = LocalDateTime.now(),
                   @Key("_id") id: UUID = UUID.randomUUID(),
                 ) {
+
+  lazy val isReadyToFetch: Boolean = title.nonEmpty && artist.nonEmpty && status == Final
+
   lazy val info = s"$artist - $title"
   lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$album$startAt$endAt$fadeOutSeconds:$volumeChange")
 }
