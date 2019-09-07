@@ -117,7 +117,7 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
   def store(url: String): ErrorOr[Track] = save(Track(url))
 
   private def updateFields(id: UUID, kv: (String, AnyRef), kvRest: (String, AnyRef)*): ErrorOr[Imports.WriteResult] = {
-    val updateQuery = MongoDBObject(kv._1 -> kv._2)
+    val updateQuery = MongoDBObject("updatedAt" -> LocalDateTime.now(), kv)
     kvRest.foreach(x => updateQuery.put(x._1, x._2))
 
     Either.catchNonFatal(dao.update(
