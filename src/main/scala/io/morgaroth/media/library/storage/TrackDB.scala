@@ -194,7 +194,16 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
     }.result()
     val limitOpt = Option(limit).map(_.intValue())
 
-    Either.catchNonFatal(limitOpt.map(dao.find(q).take(_)).getOrElse(dao.find(q)).toVector)
+    Either.catchNonFatal(dao.find(q).toVector)
+  }
+
+  def findAllReadyToFetch: Vector[Track] = {
+    val q = MongoDBObject(
+      "artist" -> s"(?i).+".r,
+      "title" -> s"(?i).+".r,
+      "status" -> Final.dbRepr
+    )
+    dao.find(q).toVector
   }
 
   def genericSearch(text: String, page: Int): ErrorOr[Vector[Track]] = {

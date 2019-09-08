@@ -38,9 +38,8 @@ class Boot extends LazyLogging {
     val storage = new TracksDB(mongoCfg)
     val cfg = Args(args).get
     println(cfg)
-    val definitions = storage.all.filter(_.isReadyToFetch).sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
+    val definitions = storage.findAllReadyToFetch.sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
     doAllWork(definitions, cfg)
-
   }
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
