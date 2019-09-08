@@ -5,10 +5,12 @@ sealed trait TrackStatus {
 }
 
 object TrackStatus {
-  val all = Vector(Draft, Final)
+  val all = Vector(Draft, Final, Deleted)
   val byDbRepr = all.map(x => x.dbRepr -> x).toMap
 }
 
 case object Draft extends TrackStatus
 
 case object Final extends TrackStatus
+
+case object Deleted extends TrackStatus

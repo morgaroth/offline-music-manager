@@ -7,7 +7,7 @@ import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.gnome.scala._
 import io.morgaroth.media.library.ErrorOr
-import io.morgaroth.media.library.storage.{Draft, Final, Track}
+import io.morgaroth.media.library.storage.{Deleted, Draft, Final, Track}
 import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}
 import org.gnome.gtk
 import org.gnome.gtk.{CellRendererText, DataColumnReference, DataColumnString, Gtk, ListStore, TreeView, VBox, Widget}
@@ -20,28 +20,32 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val singleDigit = """\s*(\d)\s*""".r
   private val twoDigits = """\s*(\d\d)\s*""".r
 
+  private def normalizeTimeValue(rawValue: String) = {
+    rawValue.trim.replace(";", ":") match {
+      case singleDigit(seconds) => s"0:0$seconds"
+      case twoDigits(seconds) => s"0:$seconds"
+      case another => another
+    }
+  }
+
   val w = new gtk.Window
   private val windowWidth = 1200
   private val windowHeight = 800
   w.setDefaultSize(windowWidth, windowHeight)
   private val infoWindow = L("")
 
-  private val nextDraft = Btn("Następny skic").onClick(_ => {
+  private val nextDraft = Btn("Następny skic").onClick(_ => loadDraft())
+
+  private def loadDraft() = {
     backend.nextDraft.map { maybeTrack =>
-      maybeTrack.fold {
-        trackUnderWork = none
-        println("brak szkiców")
-        infoWindow.setLabel("nie ma szkiców")
-      }(x => {
-        trackUnderWork = x.some
-        println(x)
-      })
+      trackUnderWork = maybeTrack
+      println(maybeTrack.map(_.toString).getOrElse("brak szkiców"))
       loadControls()
     }.left.map { err =>
       println(err)
       infoWindow.setLabel(s"ERROR: $err")
     }
-  })
+  }
 
   private val urlEdit = Edit().disabled
   private val titleEdit = Edit().disabled
@@ -85,6 +89,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val endAtSave = Btn("Zapisz").disabled
   private val fadeSave = Btn("Zapisz").disabled
   private val volumeSave = Btn("Zapisz").disabled
+  private val deleteBtn = Btn("Usuń").disabled
   private val doneBtn = Btn("Zapisz jako gotowe").disabled
   private val draftBtn = Btn("Zapisz jako szkic").disabled
 
@@ -115,11 +120,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   startAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
       val rawInput = Option(startAtEdit.getText)
-      rawInput.map(_.trim).map {
-        case singleDigit(seconds) => s"0:0$seconds"
-        case twoDigits(seconds) => s"0:$seconds"
-        case another => another
-      }.foreach {
+      rawInput.map(normalizeTimeValue).foreach {
         case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
           logger.info(s"updating ${track.id}/startAt to $validValue")
           load(backend.updateStartAt(track.id, Some(validValue)))
@@ -135,11 +136,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   endAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
       val rawInput = Option(endAtEdit.getText)
-      rawInput.map {
-        case singleDigit(seconds) => s"0:0$seconds"
-        case twoDigits(seconds) => s"0:$seconds"
-        case another => another
-      }.foreach {
+      rawInput.map(normalizeTimeValue).foreach {
         case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
           logger.info(s"updating ${track.id}/endAt to $validValue")
           load(backend.updateEndAt(track.id, Some(validValue)))
@@ -186,6 +183,10 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   //      }
   //    }
   //  }
+
+  deleteBtn.onClick(_ => trackUnderWork.map { track =>
+    backend.updateStatus(track.id, Deleted)
+  }.map(_ => loadDraft()))
 
   doneBtn.onClick(_ => trackUnderWork.map { track =>
     backend.updateStatus(track.id, Final)
@@ -239,6 +240,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     //    volumeEdit.enable(changeVolumeValue.isDefined)
     //    volumeSave.enable(changeVolumeValue.isDefined)
 
+    deleteBtn.enable(trackUnderWork.isDefined)
     doneBtn.enable(!trackUnderWork.map(_.status).forall(_ == Final))
     draftBtn.enable(!trackUnderWork.map(_.status).forall(_ == Draft))
   }
@@ -268,7 +270,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     HorizontalLayout(L("Wcześniejszy koniec"), /*endAtCheckBtn,*/ endAtEdit, endAtSave),
     HorizontalLayout(L("Wyciszanie"), /* fadeCheckBtn,*/ fadeEdit, fadeSave),
     //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
-    HorizontalLayout(draftBtn, doneBtn),
+    HorizontalLayout(deleteBtn, draftBtn, doneBtn),
     getSearchPane
   ))
   w.setTitle("Music Manager")
