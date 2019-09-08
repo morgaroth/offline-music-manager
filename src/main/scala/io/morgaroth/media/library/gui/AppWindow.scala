@@ -66,15 +66,24 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   }).disabled
 
   private val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    artistEdit.getText.trim.some.filter(_ != track.artist).map(backend.updateArtist(track.id, _)).map(load)
+    artistEdit.getText.trim.some.filter(_ != track.artist).map { artist =>
+      logger.info(s"updating ${track.id}/artist to $artist")
+      backend.updateArtist(track.id, artist)
+    }.map(load)
   }).disabled
 
   private val albumSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    albumEdit.getText.trim.some.filter(_ != track.album).map(backend.updateAlbum(track.id, _)).map(load)
+    albumEdit.getText.trim.some.filter(_ != track.album).map { album =>
+      logger.info(s"updating ${track.id}/album to $album")
+      backend.updateAlbum(track.id, album)
+    }.map(load)
   }).disabled
 
   private val titleSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    titleEdit.getText.trim.some.filter(_ != track.title).map(backend.updateTitle(track.id, _)).map(load)
+    titleEdit.getText.trim.some.filter(_ != track.title).map { title =>
+      logger.info(s"updating ${track.id}/title to $title")
+      backend.updateTitle(track.id, title)
+    }.map(load)
   }).disabled
 
   //  private val startAtCheckBtn = Checkbox("").disabled
@@ -185,14 +194,17 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   //  }
 
   deleteBtn.onClick(_ => trackUnderWork.map { track =>
+    logger.info(s"updating ${track.id}/status to ${Deleted.dbRepr}")
     backend.updateStatus(track.id, Deleted)
   }.map(_ => loadDraft()))
 
   doneBtn.onClick(_ => trackUnderWork.map { track =>
+    logger.info(s"updating ${track.id}/status to ${Final.dbRepr}")
     backend.updateStatus(track.id, Final)
   }.map(load))
 
   draftBtn.onClick(_ => trackUnderWork.map { track =>
+    logger.info(s"updating ${track.id}/status to ${Draft.dbRepr}")
     backend.updateStatus(track.id, Draft)
   }.map(load))
 
