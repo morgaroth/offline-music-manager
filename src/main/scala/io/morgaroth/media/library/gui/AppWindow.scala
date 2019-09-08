@@ -73,10 +73,10 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     titleEdit.getText.trim.some.filter(_ != track.title).map(backend.updateTitle(track.id, _)).map(load)
   }).disabled
 
-  private val startAtCheckBtn = Checkbox("").disabled
-  private val endAtCheckBtn = Checkbox("").disabled
-  private val fadeCheckBtn = Checkbox("").disabled
-  private val volumeCheckBtn = Checkbox("").disabled
+  //  private val startAtCheckBtn = Checkbox("").disabled
+  //  private val endAtCheckBtn = Checkbox("").disabled
+  //  private val fadeCheckBtn = Checkbox("").disabled
+  //  private val volumeCheckBtn = Checkbox("").disabled
   private val startAtEdit = Edit().disabled
   private val endAtEdit = Edit().disabled
   private val fadeEdit = Edit().disabled
@@ -88,104 +88,104 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val doneBtn = Btn("Zapisz jako gotowe").disabled
   private val draftBtn = Btn("Zapisz jako szkic").disabled
 
-  startAtCheckBtn.onToggle((x, _) => {
-    startAtEdit.enable(x)
-    startAtSave.enabled
-    if (!x) startAtEdit.setText("")
-  })
+  //  startAtCheckBtn.onToggle((x, _) => {
+  //    startAtEdit.enable(x)
+  //    startAtSave.enabled
+  //    if (!x) startAtEdit.setText("")
+  //  })
+  //
+  //  endAtCheckBtn.onToggle((x, _) => {
+  //    endAtEdit.enable(x)
+  //    endAtSave.enabled
+  //    if (!x) endAtEdit.setText("")
+  //  })
+  //
+  //  fadeCheckBtn.onToggle((x, _) => {
+  //    fadeEdit.enable(x)
+  //    fadeSave.enabled
+  //    if (!x) fadeEdit.setText("")
+  //  })
 
-  endAtCheckBtn.onToggle((x, _) => {
-    endAtEdit.enable(x)
-    endAtSave.enabled
-    if (!x) endAtEdit.setText("")
-  })
-
-  fadeCheckBtn.onToggle((x, _) => {
-    fadeEdit.enable(x)
-    fadeSave.enabled
-    if (!x) fadeEdit.setText("")
-  })
-
-  volumeCheckBtn.onToggle((x, _) => {
-    volumeEdit.enable(x)
-    volumeSave.enabled
-    if (!x) volumeEdit.setText("")
-  })
+  //  volumeCheckBtn.onToggle((x, _) => {
+  //    volumeEdit.enable(x)
+  //    volumeSave.enabled
+  //    if (!x) volumeEdit.setText("")
+  //  })
 
   startAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
-      val pData = startAtCheckBtn.getActive
-      val finalValue = Option(startAtEdit.getText).map(_.trim).map {
+      val rawInput = Option(startAtEdit.getText)
+      rawInput.map(_.trim).map {
         case singleDigit(seconds) => s"0:0$seconds"
         case twoDigits(seconds) => s"0:$seconds"
         case another => another
-      }.filter(_.matches("""^\d?\d:\d\d$"""))
-      if (pData && finalValue.isDefined) {
-        logger.info(s"updating ${track.id}/startAt to $finalValue")
-        load(backend.updateStartAt(track.id, finalValue))
-      } else if (!pData) {
-        logger.info(s"removing ${track.id}/startAt")
-        load(backend.updateStartAt(track.id, None))
-      } else {
-        logger.warn(s"invalid data checked=$pData, value='$finalValue' (raw input: ${Option(startAtEdit.getText)})")
+      }.foreach {
+        case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
+          logger.info(s"updating ${track.id}/startAt to $validValue")
+          load(backend.updateStartAt(track.id, Some(validValue)))
+        case "" =>
+          logger.info(s"removing ${track.id}/startAt")
+          load(backend.updateStartAt(track.id, None))
+        case invalidOne =>
+          logger.warn(s"invalid data value='$invalidOne' (raw input: ${rawInput})")
       }
     }
   }
 
   endAtSave.onClick { _ =>
     trackUnderWork.foreach { track =>
-      val pData = endAtCheckBtn.getActive
-      val v = Option(endAtEdit.getText).map {
+      val rawInput = Option(endAtEdit.getText)
+      rawInput.map {
         case singleDigit(seconds) => s"0:0$seconds"
         case twoDigits(seconds) => s"0:$seconds"
         case another => another
-      }.filter(_.matches("""^\d?\d:\d\d$"""))
-      if (pData && v.isDefined) {
-        logger.info(s"updating ${track.id}/endAt to $v")
-        load(backend.updateEndAt(track.id, v))
-      } else if (!pData) {
-        logger.info(s"removing ${track.id}/endAt")
-        load(backend.updateEndAt(track.id, None))
-      } else {
-        logger.warn(s"invalid data checked=$pData, value='$v'")
+      }.foreach {
+        case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
+          logger.info(s"updating ${track.id}/endAt to $validValue")
+          load(backend.updateEndAt(track.id, Some(validValue)))
+        case "" =>
+          logger.info(s"removing ${track.id}/endAt")
+          load(backend.updateEndAt(track.id, None))
+        case invalidOne =>
+          logger.warn(s"invalid data value='$invalidOne' (raw input: ${rawInput})")
       }
     }
   }
 
   fadeSave.onClick { _ =>
     trackUnderWork.foreach { track =>
-      val pData = fadeCheckBtn.getActive
-      val v = Option(fadeEdit.getText).filter(_.matches("""^\d+$""")).map(_.toInt)
-      if (pData && v.isDefined) {
-        logger.info(s"updating ${track.id}/fadeOutSeconds to $v")
-        load(backend.updateFadeOutSeconds(track.id, v))
-      } else if (!pData) {
-        logger.info(s"removing ${track.id}/fadeOutSeconds")
-        load(backend.updateFadeOutSeconds(track.id, None))
-      } else {
-        logger.warn(s"invalid data checked=$pData, value='$v'")
+      val rawInput = Option(fadeEdit.getText)
+      rawInput.foreach {
+        case validValue if validValue.matches("""^\d+$""") =>
+          logger.info(s"updating ${track.id}/fadeOutSeconds to $validValue")
+          load(backend.updateFadeOutSeconds(track.id, Some(validValue.toInt)))
+        case "" =>
+          logger.info(s"removing ${track.id}/fadeOutSeconds")
+          load(backend.updateFadeOutSeconds(track.id, None))
+        case invalidOne =>
+          logger.warn(s"invalid data value='$invalidOne'm raw='$rawInput'")
       }
     }
   }
 
-  volumeSave.onClick { _ =>
-    trackUnderWork.foreach { track =>
-      val pData = volumeCheckBtn.getActive
-      val v = Option(volumeEdit.getText).filter(_.matches("""^\d+(\.\d+)?$""")).map(BigDecimal(_))
-      if (pData && v.isDefined) {
-        val action = s"updating ${track.id}/volumeChange to $v"
-        logger.info(action)
-        load(backend.updateVolumeChange(track.id, v)).left.map(err => logger.warn(s"$action finished with error $err"))
-      } else if (!pData) {
-        val action = s"removing ${track.id}/volumeChange"
-        logger.info(action)
-        load(backend.updateVolumeChange(track.id, None)).left.map(err => logger.warn(s"$action finished with error $err"))
-      } else {
-        logger.warn(s"invalid data checked=$pData, value='$v'")
-        Right(track)
-      }
-    }
-  }
+  //  volumeSave.onClick { _ =>
+  //    trackUnderWork.foreach { track =>
+  //      val pData = volumeCheckBtn.getActive
+  //      val v = Option(volumeEdit.getText).filter(_.matches("""^\d+(\.\d+)?$""")).map(BigDecimal(_))
+  //      if (pData && v.isDefined) {
+  //        val action = s"updating ${track.id}/volumeChange to $v"
+  //        logger.info(action)
+  //        load(backend.updateVolumeChange(track.id, v)).left.map(err => logger.warn(s"$action finished with error $err"))
+  //      } else if (!pData) {
+  //        val action = s"removing ${track.id}/volumeChange"
+  //        logger.info(action)
+  //        load(backend.updateVolumeChange(track.id, None)).left.map(err => logger.warn(s"$action finished with error $err"))
+  //      } else {
+  //        logger.warn(s"invalid data checked=$pData, value='$v'")
+  //        Right(track)
+  //      }
+  //    }
+  //  }
 
   doneBtn.onClick(_ => trackUnderWork.map { track =>
     backend.updateStatus(track.id, Final)
@@ -214,26 +214,23 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     albumEdit.enable(trackUnderWork.isDefined)
     albumSave.enable(trackUnderWork.isDefined)
 
-    val startAtValue = trackUnderWork.flatMap(_.startAt)
-    startAtCheckBtn.enable(trackUnderWork.isDefined)
-    startAtCheckBtn.select(startAtValue.isDefined)
-    startAtEdit.setText(startAtValue.orEmpty)
-    startAtEdit.enable(startAtValue.isDefined)
-    startAtSave.enable(startAtValue.isDefined)
+    //    startAtCheckBtn.enable(trackUnderWork.isDefined)
+    //    startAtCheckBtn.select(startAtValue.isDefined)
+    startAtEdit.setText(trackUnderWork.flatMap(_.startAt).orEmpty)
+    startAtEdit.enable(trackUnderWork.isDefined)
+    startAtSave.enable(trackUnderWork.isDefined)
 
-    val endAtValue = trackUnderWork.flatMap(_.endAt)
-    endAtCheckBtn.enable(trackUnderWork.isDefined)
-    endAtCheckBtn.select(endAtValue.isDefined)
-    endAtEdit.setText(endAtValue.orEmpty)
-    endAtEdit.enable(endAtValue.isDefined)
-    endAtSave.enable(endAtValue.isDefined)
+    //    endAtCheckBtn.enable(trackUnderWork.isDefined)
+    //    endAtCheckBtn.select(endAtValue.isDefined)
+    endAtEdit.setText(trackUnderWork.flatMap(_.endAt).orEmpty)
+    endAtEdit.enable(trackUnderWork.isDefined)
+    endAtSave.enable(trackUnderWork.isDefined)
 
-    val fadeOutValue = trackUnderWork.flatMap(_.fadeOutSeconds).map(_.toString)
-    fadeCheckBtn.enable(trackUnderWork.isDefined)
-    fadeCheckBtn.select(fadeOutValue.isDefined)
-    fadeEdit.setText(fadeOutValue.orEmpty)
-    fadeEdit.enable(fadeOutValue.isDefined)
-    fadeSave.enable(fadeOutValue.isDefined)
+    //    fadeCheckBtn.enable(trackUnderWork.isDefined)
+    //    fadeCheckBtn.select(fadeOutValue.isDefined)
+    fadeEdit.setText(trackUnderWork.flatMap(_.fadeOutSeconds).map(_.toString).orEmpty)
+    fadeEdit.enable(trackUnderWork.isDefined)
+    fadeSave.enable(trackUnderWork.isDefined)
 
     //    val changeVolumeValue = trackUnderWork.flatMap(_.volumeChange).map(_.toString())
     //    volumeCheckBtn.enable(trackUnderWork.isDefined)
@@ -267,9 +264,9 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     HorizontalLayout(L("Twórca"), artistEdit, artistSave),
     HorizontalLayout(L("Tytuł"), titleEdit, titleSave),
     HorizontalLayout(L("Album"), albumEdit, albumSave),
-    HorizontalLayout(L("Opóżniony start"), startAtCheckBtn, startAtEdit, startAtSave),
-    HorizontalLayout(L("Wcześniejszy koniec"), endAtCheckBtn, endAtEdit, endAtSave),
-    HorizontalLayout(L("Wyciszanie"), fadeCheckBtn, fadeEdit, fadeSave),
+    HorizontalLayout(L("Opóżniony start"), /*startAtCheckBtn,*/ startAtEdit, startAtSave),
+    HorizontalLayout(L("Wcześniejszy koniec"), /*endAtCheckBtn,*/ endAtEdit, endAtSave),
+    HorizontalLayout(L("Wyciszanie"), /* fadeCheckBtn,*/ fadeEdit, fadeSave),
     //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
     HorizontalLayout(draftBtn, doneBtn),
     getSearchPane
