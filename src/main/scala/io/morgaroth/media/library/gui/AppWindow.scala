@@ -282,8 +282,9 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     HorizontalLayout(L("Wcześniejszy koniec"), /*endAtCheckBtn,*/ endAtEdit, endAtSave),
     HorizontalLayout(L("Wyciszanie"), /* fadeCheckBtn,*/ fadeEdit, fadeSave),
     //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
-    HorizontalLayout(deleteBtn, draftBtn, doneBtn),
-    getSearchPane
+    HorizontalLayout(draftBtn, doneBtn),
+    getSearchPane,
+    HorizontalLayout(deleteBtn),
   ))
   w.setTitle("Music Manager")
   w.showAll()
