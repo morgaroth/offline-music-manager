@@ -10,5 +10,8 @@
 //    val cfg = ConfigFactory.load()
 //    val mongoCfg = cfg.getConfig("music-library.mongo")
 //    val storage = new TracksDB(mongoCfg)
+//    storage.all.foreach { tr =>
+//      storage.updateAlbum(tr.id, tr.album)
+//    }
 //  }
 //}

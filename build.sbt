@@ -7,7 +7,9 @@ name := "MusicLibrary"
 
 version := "0.1"
 
-scalaVersion := "2.12.9"
+scalaVersion := "2.12.10"
+
+val circeVersion = "0.10.0"
 
 resolvers += Resolver.bintrayRepo("morgaroth", "maven")
 
@@ -19,7 +21,10 @@ libraryDependencies ++= Seq(
   "io.morgaroth" %% "gnome-scala" % "1.0.3",
 ) ++ Seq(
   "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
-)
+) ++ Seq(
+  "io.circe" %% "circe-generic",
+  "io.circe" %% "circe-parser",
+).map(_ % circeVersion)
 
 maintainer := "Mateusz Jaje <mateuszjaje@gmail.com"
 

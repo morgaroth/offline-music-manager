@@ -2,12 +2,15 @@ package io.morgaroth.media.library
 
 import java.io.File
 
+import scala.util.Try
+
 case class Configuration(
                           destinationDir: File = new File(new File(System.getProperty("user.home")), "music-library"),
                           downloaderExec: String = "youtube-dl",
+                          regex: String = ".*",
                           force: Boolean = false,
                           forceLevel: Int = 0,
-                          debug: Boolean= false,
+                          debug: Boolean = false,
                         ) {
   def cacheLocation = new File(destinationDir, "cache")
 
@@ -15,6 +18,7 @@ case class Configuration(
     s"""configuration:
     - destinationDir = ${destinationDir.getAbsolutePath}
     - downloaderExec = $downloaderExec
+    - filterRegex = $regex
     - force = $force
     - forceLevel = $forceLevel
 """
@@ -32,6 +36,12 @@ object Args {
     opt[String]("downloader-exec")
       .valueName("<path>")
       .action((x, c) => c.copy(downloaderExec = x))
+      .text("program used to fetch data")
+
+    opt[String]("filter")
+      .valueName("<regex>")
+      .validate(x => Try(x.r).toEither.left.map(_.toString).map(_ => ()))
+      .action((x, c) => c.copy(regex = x))
       .text("program used to fetch data")
 
     opt[Int]("force")

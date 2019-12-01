@@ -28,18 +28,20 @@ case class MusicDefinition(
 }
 
 class Boot extends LazyLogging {
+  private val tcfg = ConfigFactory.load()
+  private val mongoCfg = tcfg.getConfig("music-library.mongo")
+  private val storage = new TracksDB(mongoCfg)
+
   val algorithmVersion = "4"
 
   def main(args: Array[String]): Unit = {
     assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
 
-    val tcfg = ConfigFactory.load()
-    val mongoCfg = tcfg.getConfig("music-library.mongo")
-    val storage = new TracksDB(mongoCfg)
     val cfg = Args(args).get
     println(cfg)
     val definitions = storage.findAllReadyToFetch.sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
-    doAllWork(definitions, cfg)
+    val filtered = definitions.filter(_.info.matches(cfg.regex))
+    doAllWork(filtered, cfg)
   }
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
