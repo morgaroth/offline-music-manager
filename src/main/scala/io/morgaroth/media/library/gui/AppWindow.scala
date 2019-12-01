@@ -21,10 +21,18 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val twoDigits = """\s*(\d\d)\s*""".r
 
   private def normalizeTimeValue(rawValue: String) = {
-    rawValue.trim.replace(";", ":") match {
+    rawValue.trim.replaceAll("[;:,]", ":") match {
       case singleDigit(seconds) => s"0:0$seconds"
       case twoDigits(seconds) => s"0:$seconds"
       case another => another
+    }
+  }
+
+  private val nameStripped = """^[\s-/]*(.+?)[\s-/]*$""".r
+
+  private def normalizeName(rawValue: String) = {
+    rawValue.trim match {
+      case nameStripped(name) => name
     }
   }
 
@@ -66,21 +74,21 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   }).disabled
 
   private val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    artistEdit.getText.trim.some.filter(_ != track.artist).map { artist =>
+    normalizeName(artistEdit.getText).some.filter(_ != track.artist).map { artist =>
       logger.info(s"updating ${track.id}/artist to $artist")
       backend.updateArtist(track.id, artist)
     }.map(load)
   }).disabled
 
   private val albumSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    albumEdit.getText.trim.some.filter(_ != track.album).map { album =>
+    normalizeName(albumEdit.getText).some.filter(_ != track.album).map { album =>
       logger.info(s"updating ${track.id}/album to $album")
       backend.updateAlbum(track.id, album)
     }.map(load)
   }).disabled
 
   private val titleSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    titleEdit.getText.trim.some.filter(_ != track.title).map { title =>
+    normalizeName(titleEdit.getText).some.filter(_ != track.title).map { title =>
       logger.info(s"updating ${track.id}/title to $title")
       backend.updateTitle(track.id, title)
     }.map(load)
