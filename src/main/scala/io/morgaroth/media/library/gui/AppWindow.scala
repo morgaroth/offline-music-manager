@@ -33,6 +33,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private def normalizeName(rawValue: String) = {
     rawValue.trim match {
       case nameStripped(name) => name
+      case "" => ""
     }
   }
 

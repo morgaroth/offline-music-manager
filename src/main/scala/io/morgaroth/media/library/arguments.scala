@@ -2,6 +2,8 @@ package io.morgaroth.media.library
 
 import java.io.File
 
+import scopt.OptionParser
+
 import scala.util.Try
 
 case class Configuration(
@@ -26,7 +28,7 @@ case class Configuration(
 
 object Args {
 
-  val parser = new scopt.OptionParser[Configuration]("Media Library Manager") {
+  val parser: OptionParser[Configuration] = new scopt.OptionParser[Configuration]("Media Library Manager") {
     head("media library manager", "0.1.0")
     opt[File]('d', "destination")
       .valueName("<file>")
@@ -49,7 +51,7 @@ object Args {
       .text("level of force, 1 - only extract final from encoded, 2 - doreencoding")
   }
 
-  def apply(args: Array[String]) = {
+  def apply(args: Array[String]): Option[Configuration] = {
     parser.parse(args, Configuration())
   }
 }
