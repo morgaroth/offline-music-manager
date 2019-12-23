@@ -1,5 +1,6 @@
 package io.morgaroth.media.library.storage
 
+import java.net.URLEncoder
 import java.util.UUID
 
 import cats.implicits._
@@ -30,6 +31,7 @@ case class Track(
                   createdAt: LocalDateTime = LocalDateTime.now(),
                   @Key("_id") id: UUID = UUID.randomUUID(),
                 ) {
+  lazy val searchUrl = s"https://www.youtube.com/results?search_query=${URLEncoder.encode(s"$title $artist", "utf-8")}"
 
   lazy val isReadyToFetch: Boolean = title.nonEmpty && artist.nonEmpty && status == Final
 

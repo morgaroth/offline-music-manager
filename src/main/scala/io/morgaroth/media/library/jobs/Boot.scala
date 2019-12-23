@@ -45,34 +45,38 @@ class Boot extends LazyLogging {
   }
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
-    definitions.foreach { definition =>
+    definitions.foreach { implicit definition =>
       val versionId = definition.UFID + algorithmVersion
       val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
       if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId)) {
         logger.info("File {} already downloaded", definition.info)
       } else {
-        try {
-          val source = download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug).valueOr { x => print(x); throw x }
-          val mp3file = convertToMP3(source, cfg, definition)
-          val trimmed = strip(mp3file, definition, cfg.debug)
-          val finalFile = dist(trimmed, destination)
-          addTags(
+        val work = for {
+          source <- download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug)
+          mp3file = convertToMP3(source, cfg, definition)
+          trimmed = strip(mp3file, definition, cfg.debug)
+          finalFile = dist(trimmed, destination)
+          _ = addTags(
             album = definition.album.some.filter(_.nonEmpty).getOrElse("Twórczość"),
             author = definition.artist,
             title = definition.title,
             file = finalFile,
             id = versionId,
           )
-          logger.info("File {} ready", definition.info)
-        } catch {
-          case t: Throwable => logger.error(s"Error $t during handling ${definition.url}, going forward...")
-        }
+          _ = logger.info("File {} ready", definition.info)
+        } yield ()
+        work.leftMap {
+          case t: URLFetchError =>
+            logger.warn(s"The track needs to be updated ${t.getMessage}")
+          case t: Throwable =>
+            logger.error(s"Error $t during handling ${definition.url}, going forward...")
+        }.getOrElse(())
       }
     }
   }
 
-  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false): Either[Exception, File] = {
-    def doWork(retries: Int = 5): Either[Exception, File] = {
+  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false)(implicit track: Track): Either[Throwable, File] = {
+    def doWork(retries: Int = 5): Either[Throwable, File] = {
       try {
         val format = s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s"
         val destinationFilePath = Seq(downloaderExec, "--get-filename", "-f", "mp4", "-o", format, url).!!<
@@ -95,15 +99,13 @@ class Boot extends LazyLogging {
         case _: Throwable if retries > 0 =>
           logger.warn(s"error during downloading link $url")
           doWork(retries - 1)
+        case t: Throwable =>
+          logger.error(s"Converting ${t.getMessage} to URLFetchError")
+          Left(new URLFetchError(track.title, track.artist, track.album, track.searchUrl))
       }
     }
 
     doWork()
-    //    decode[YoutubeDLMeta](json).left.map {
-    //      case c: DecodingFailure => c.copy(message = json)
-    //      case e => e
-    //    }
-
   }
 
   private def ffmpeg(inputArgs: String*)(input: File)(outputArgs: String*)(output: File)(quiet: Boolean, debug: Boolean) = {
@@ -211,3 +213,6 @@ class Boot extends LazyLogging {
 }
 
 case class YoutubeDLMeta(_filename: String)
+
+class URLFetchError(title: String, artist: String, album: String, searchUrl: String)
+  extends Throwable(s"cannot fetch $title - $artist ($album), search it again $searchUrl")

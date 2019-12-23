@@ -1,6 +1,5 @@
 package io.morgaroth.media.library.gui
 
-import java.net.URLEncoder
 import java.util.UUID
 
 import cats.syntax.option._
@@ -70,8 +69,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   }).disabled
 
   private val searchYTBtn = Btn("Szukaj w YT!").onClick(_ => trackUnderWork.foreach { track =>
-    val query = URLEncoder.encode(s"${track.title} ${track.artist}", "utf-8")
-    s"google-chrome https://www.youtube.com/results?search_query=$query".!
+    s"google-chrome ${track.searchUrl}".!
   }).disabled
 
   private val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
