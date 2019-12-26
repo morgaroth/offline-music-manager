@@ -18,14 +18,14 @@ object UUIDConversionHelpers extends MongoConversionHelper {
     }
   }
 
-  val clazz = classOf[UUID]
+  private val clazz = classOf[UUID]
 
-  override def register() = {
+  override def register(): Unit = {
     super.register()
     BSON.addEncodingHook(clazz, encoder)
   }
 
-  override def unregister() = {
+  override def unregister(): Unit = {
     super.unregister()
     BSON.removeEncodingHook(clazz, encoder)
   }

@@ -27,6 +27,8 @@ case class Track(
                   status: TrackStatus,
                   idCheck: Option[String],
                   playlists: Set[String] = Set.empty,
+                  rawTitle: Option[String] = Some(""),
+                  rawDescription: Option[String] = Some(""),
                   updatedAt: LocalDateTime = LocalDateTime.now(),
                   createdAt: LocalDateTime = LocalDateTime.now(),
                   @Key("_id") id: UUID = UUID.randomUUID(),
@@ -175,6 +177,14 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
 
   def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track] = {
     updateFields(id, "playlists" -> newData) >> getById(id)
+  }
+
+  def updateRawTitle(id: UUID, newData: Option[String]): ErrorOr[Track] = {
+    updateFields(id, "rawTitle" -> newData) >> getById(id)
+  }
+
+  def updateRawDescription(id: UUID, newData: Option[String]): ErrorOr[Track] = {
+    updateFields(id, "rawDescription" -> newData) >> getById(id)
   }
 
   def findAllPlaylists(): ErrorOr[Map[String, Vector[Track]]] = {

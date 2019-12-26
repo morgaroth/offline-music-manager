@@ -36,3 +36,7 @@ deploy := {
   (packageBin in Debian).toTask.value
   Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
 }
+
+sources in (Compile,doc) := Seq.empty
+
+publishArtifact in (Compile, packageDoc) := false

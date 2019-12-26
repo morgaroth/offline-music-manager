@@ -1,6 +1,8 @@
 package io.morgaroth.media.library.jobs
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 
 import cats.syntax.either._
 import cats.syntax.option._
@@ -11,6 +13,7 @@ import io.circe.generic.auto._
 import io.circe.parser._
 import io.morgaroth.media.library.storage.{Track, TracksDB}
 import io.morgaroth.media.library.{Args, Configuration}
+import org.joda.time.LocalDateTime
 
 import scala.sys.process._
 
@@ -52,19 +55,24 @@ class Boot extends LazyLogging {
         logger.info("File {} already downloaded", definition.info)
       } else {
         val work = for {
-          source <- download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug)
+          a <- download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug)
+          (source, ytMeta) = a
           mp3file = convertToMP3(source, cfg, definition)
           trimmed = strip(mp3file, definition, cfg.debug)
           finalFile = dist(trimmed, destination)
-          _ = addTags(
+          _ <- addTags(
             album = definition.album.some.filter(_.nonEmpty).getOrElse("Twórczość"),
             author = definition.artist,
             title = definition.title,
             file = finalFile,
             id = versionId,
           )
+          _ <- setTimestamps(finalFile, definition.createdAt, definition.updatedAt)
+          _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition.id, Some(ytMeta.title))
+          _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition.id, Some(ytMeta.title))
           _ = logger.info("File {} ready", definition.info)
         } yield ()
+
         work.leftMap {
           case t: URLFetchError =>
             logger.warn(s"The track needs to be updated ${t.getMessage}")
@@ -75,27 +83,43 @@ class Boot extends LazyLogging {
     }
   }
 
-  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false)(implicit track: Track): Either[Throwable, File] = {
-    def doWork(retries: Int = 5): Either[Throwable, File] = {
-      try {
-        val format = s"${dest.getAbsolutePath}/%(title)s (%(id)s) - RAW.%(ext)s"
-        val destinationFilePath = Seq(downloaderExec, "--get-filename", "-f", "mp4", "-o", format, url).!!<
-        val destFile = new File(destinationFilePath)
-        if (destFile.exists()) {
-          logger.info(s"Using previously downloaded file $destFile.")
-          destFile.asRight
+  def setTimestamps(file: File, created: LocalDateTime, modified: LocalDateTime): Either[Throwable, Unit] = {
+    Either.catchNonFatal {
+      Files.setAttribute(file.toPath, "creationTime", FileTime.fromMillis(created.toDateTime.getMillis))
+      file.setLastModified(modified.toDateTime.getMillis)
+    }
+  }
+
+  def getYTMetadata(downloaderExec: String, url: String, format: String): Either[Throwable, YoutubeDLMeta] = {
+    Either.catchNonFatal {
+      Seq(downloaderExec, "--print-json", "-s", url, "-o", format).!!<
+    }.flatMap { json =>
+      decode[YoutubeDLMeta](json).left.map {
+        case c: DecodingFailure => c.copy(message = json)
+        case e => e
+      }
+    }
+  }
+
+  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false)(implicit track: Track): Either[Throwable, (File, YoutubeDLMeta)] = {
+
+    def doWork(retries: Int = 5): Either[Throwable, (File, YoutubeDLMeta)] = {
+      val work = for {
+        ytMetadata <- getYTMetadata(downloaderExec, url, "%(title)s (%(id)s) - RAW.%(ext)s")
+        destinationPath = new File(dest, ytMetadata._filename)
+        _ <- if (destinationPath.exists()) {
+          logger.info(s"Using previously downloaded file $destinationPath.")
+          ().asRight
         } else {
-          val args = Seq(downloaderExec, "--print-json", "--restrict-filenames", "-f", "mp4", "-o", format, url)
+          val args = Seq(downloaderExec, /*"--print-json",*/ "--restrict-filenames", "-f", "mp4", "-o", destinationPath.toPath.toString, url)
           if (debug) {
             logger.debug("--> {}", args.mkString(" "))
           }
-          val json = args.!!<
-          decode[YoutubeDLMeta](json).left.map {
-            case c: DecodingFailure => c.copy(message = json)
-            case e => e
-          }.map(x => new File(x._filename))
+          Either.catchNonFatal(args.!!<)
         }
-      } catch {
+      } yield (destinationPath, ytMetadata)
+
+      work.recoverWith {
         case _: Throwable if retries > 0 =>
           logger.warn(s"error during downloading link $url")
           doWork(retries - 1)
@@ -169,7 +193,7 @@ class Boot extends LazyLogging {
     }.getOrElse(Seq("-acodec", "copy"))
     ffmpeg(a.map("-ss" :: _.toString :: Nil).toSeq.flatten: _*)(source)(
       codecsInfo ++ b.map("-to" :: _.toString :: Nil).toSeq.flatten: _*,
-    )(t1)(true, debug)
+    )(t1)(quiet = true, debug = debug)
     t1
   }
 
@@ -179,8 +203,10 @@ class Boot extends LazyLogging {
     destination
   }
 
-  def addTags(file: File, author: String, title: String, album: String, id: String): Unit = {
-    Seq("mid3v2", file.getAbsolutePath, "-t", title, "-a", author, "-A", album, "--UFID", s"definitionhash:$id").!!
+  def addTags(file: File, author: String, title: String, album: String, id: String): Either[Throwable, String] = {
+    Either.catchNonFatal {
+      Seq("mid3v2", file.getAbsolutePath, "-t", title, "-a", author, "-A", album, "--UFID", s"definitionhash:$id").!!
+    }
   }
 
   def getUFIDTag(file: File): Option[String] = {
@@ -212,7 +238,13 @@ class Boot extends LazyLogging {
   }
 }
 
-case class YoutubeDLMeta(_filename: String)
+case class YoutubeDLMeta(
+                          description: String,
+                          title: String,
+                          thumbnail: String,
+                          fulltitle: String,
+                          _filename: String,
+                        )
 
 class URLFetchError(title: String, artist: String, album: String, searchUrl: String)
   extends Throwable(s"cannot fetch $title - $artist ($album), search it again $searchUrl")
