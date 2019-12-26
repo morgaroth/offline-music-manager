@@ -1,8 +1,8 @@
 package io.morgaroth.media.library.jobs
 
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.attribute.FileTime
+import java.nio.file.{Files, StandardCopyOption}
 
 import cats.syntax.either._
 import cats.syntax.option._
@@ -17,19 +17,6 @@ import org.joda.time.LocalDateTime
 
 import scala.sys.process._
 
-case class MusicDefinition(
-                            sourceUrl: String,
-                            title: String,
-                            author: String,
-                            draft: Boolean,
-                            album: Option[String],
-                            startAt: Option[String],
-                            endAt: Option[String],
-                            fadeOutSeconds: Option[Int],
-                          ) {
-  def info = s"$author - $title"
-}
-
 class Boot extends LazyLogging {
   private val tcfg = ConfigFactory.load()
   private val mongoCfg = tcfg.getConfig("music-library.mongo")
@@ -38,8 +25,6 @@ class Boot extends LazyLogging {
   val algorithmVersion = "4"
 
   def main(args: Array[String]): Unit = {
-    assert(fixDuration(Some("0:05"), Some("4:00"))._2.contains("00:03:55"))
-
     val cfg = Args(args).get
     println(cfg)
     val definitions = storage.findAllReadyToFetch.sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
@@ -76,10 +61,31 @@ class Boot extends LazyLogging {
         work.leftMap {
           case t: URLFetchError =>
             logger.warn(s"The track needs to be updated ${t.getMessage}")
+            t
           case t: Throwable =>
             logger.error(s"Error $t during handling ${definition.url}, going forward...")
-        }.getOrElse(())
+            t
+        }.valueOr(throw _)
       }
+
+      copyFileToPlaylistDirectories(cfg.destinationDir, destination, definition).valueOr(throw _)
+    }
+  }
+
+  def copyFileToPlaylistDirectories(destinationDir: File, file: File, track: Track): Either[Throwable, Unit] = {
+    track.playlists.foldLeft(().asRight[Throwable]) {
+      case (acc, playlist) =>
+        acc.flatMap { _ =>
+          Either.catchNonFatal {
+            logger.info(s"Copying ${file.getName} to $playlist")
+            val playlistDir = new File(destinationDir, playlist)
+            if (!playlistDir.exists()) {
+              logger.info(s"$playlistDir does not exist, creaing...")
+              playlistDir.mkdir()
+            }
+            Files.copy(file.toPath, new File(playlistDir, file.getName).toPath)
+          }
+        }
     }
   }
 

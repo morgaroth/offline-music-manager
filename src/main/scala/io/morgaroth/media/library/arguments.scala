@@ -6,7 +6,12 @@ import scopt.OptionParser
 
 import scala.util.Try
 
+sealed trait MusicLibraryAction
+
+case object Undefined extends MusicLibraryAction
+
 case class Configuration(
+                          action: MusicLibraryAction = Undefined,
                           destinationDir: File = new File(new File(System.getProperty("user.home")), "music-library"),
                           downloaderExec: String = "youtube-dl",
                           regex: String = ".*",
@@ -18,11 +23,13 @@ case class Configuration(
 
   override def toString =
     s"""configuration:
+    - action = ${action}
     - destinationDir = ${destinationDir.getAbsolutePath}
     - downloaderExec = $downloaderExec
     - filterRegex = $regex
     - force = $force
     - forceLevel = $forceLevel
+    - debug = $debug
 """
 }
 
@@ -30,7 +37,7 @@ object Args {
 
   val parser: OptionParser[Configuration] = new scopt.OptionParser[Configuration]("Media Library Manager") {
     head("media library manager", "0.1.0")
-    opt[File]('d', "destination")
+    opt[File]('d', "destination-dir")
       .valueName("<file>")
       .action((x, c) => c.copy(destinationDir = x))
       .text("place where files should be put")
@@ -49,6 +56,10 @@ object Args {
     opt[Int]("force")
       .action((x, c) => c.copy(forceLevel = x))
       .text("level of force, 1 - only extract final from encoded, 2 - doreencoding")
+
+    opt[Boolean]("debug")
+      .action((x, c) => c.copy(debug = x))
+      .text("debug mode")
   }
 
   def apply(args: Array[String]): Option[Configuration] = {

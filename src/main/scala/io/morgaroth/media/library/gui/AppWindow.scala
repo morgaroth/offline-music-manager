@@ -101,6 +101,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
   private val endAtEdit = Edit().disabled
   private val fadeEdit = Edit().disabled
   private val volumeEdit = Edit().disabled
+  private val playlistsEdit = Edit().disabled
   private val startAtSave = Btn("Zapisz").disabled
   private val endAtSave = Btn("Zapisz").disabled
   private val fadeSave = Btn("Zapisz").disabled
@@ -259,6 +260,9 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     //    volumeEdit.enable(changeVolumeValue.isDefined)
     //    volumeSave.enable(changeVolumeValue.isDefined)
 
+    val playlistsValue = trackUnderWork.map(_.playlists.mkString(", "))
+    playlistsEdit.setText(playlistsValue.orEmpty)
+
     deleteBtn.enable(trackUnderWork.isDefined)
     doneBtn.enable(!trackUnderWork.map(_.status).forall(_ == Final))
     draftBtn.enable(!trackUnderWork.map(_.status).forall(_ == Draft))
@@ -288,6 +292,7 @@ class AppWindow(backend: GuiBackend) extends LazyLogging {
     HorizontalLayout(L("Opóżniony start"), /*startAtCheckBtn,*/ startAtEdit, startAtSave),
     HorizontalLayout(L("Wcześniejszy koniec"), /*endAtCheckBtn,*/ endAtEdit, endAtSave),
     HorizontalLayout(L("Wyciszanie"), /* fadeCheckBtn,*/ fadeEdit, fadeSave),
+    HorizontalLayout(L("Playlisty"), /* fadeCheckBtn,*/ playlistsEdit/*, fadeSave*/),
     //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
     HorizontalLayout(draftBtn, doneBtn),
     getSearchPane,
