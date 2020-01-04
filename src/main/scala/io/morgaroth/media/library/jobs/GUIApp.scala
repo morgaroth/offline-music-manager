@@ -1,11 +1,12 @@
 package io.morgaroth.media.library.jobs
 
 import com.typesafe.config.ConfigFactory
-import io.morgaroth.media.library.gui.{AppWindow, MongoBackedGuiBackend}
+import io.morgaroth.media.library.gui.MongoBackedGuiBackend
+import io.morgaroth.media.library.gui.windows.AppWindow
 import io.morgaroth.media.library.storage.TracksDB
 import org.gnome.gtk.Gtk
 
-class GUIApp {
+object GUIApp {
   def main(args: Array[String]): Unit = {
     Gtk.init(args)
     val cfg = ConfigFactory.load()
