@@ -1,50 +1,68 @@
+import sbt.Keys.scalaVersion
+
 import scala.language.postfixOps
 import scala.sys.process._
 
-enablePlugins(JavaAppPackaging, DebianPlugin)
 
-name := "MusicLibrary"
+val commonSettings = Seq(
+  version := "0.1",
+  scalaVersion := "2.12.11",
+)
 
-version := "0.1"
-
-scalaVersion := "2.12.10"
-
-val circeVersion = "0.10.0"
-
-resolvers += Resolver.bintrayRepo("morgaroth", "maven")
-
-libraryDependencies ++= Seq(
-  "com.github.scopt" %% "scopt" % "3.7.0",
-  "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
-  "java" % "java-gnome" % "4.1.2" from "file:///usr/share/java/gtk.jar",
-  "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
-  "io.morgaroth" %% "gnome-scala" % "1.0.4-SNAPSHOT",
-  "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
-) ++ Seq(
-  "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
-) ++ Seq(
-  "io.circe" %% "circe-generic",
-  "io.circe" %% "circe-parser",
-).map(_ % circeVersion)
-
-maintainer := "Mateusz Jaje <mateuszjaje@gmail.com"
-
-debianPackageDependencies += "java8-runtime-headless"
-
+val circeVersion = "0.12.0"
 val deploy = taskKey[Unit]("Deploy deb.")
-
-deploy := {
-  (packageBin in Debian).toTask.value
-  Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
-}
-
-sources in(Compile, doc) := Seq.empty
-
-publishArtifact in(Compile, packageDoc) := false
-
 val disabledMainClasses = Set("io.morgaroth.media.library.jobs.GUIApp")
 
-discoveredMainClasses in Compile := {
-  (discoveredMainClasses in Compile).value.filterNot(disabledMainClasses)
-}
+val domain = project.in(file("Domain"))
+  .settings(commonSettings)
+  .settings(
+    name := "MusicLibrary",
+    resolvers += Resolver.bintrayRepo("morgaroth", "maven"),
+
+    libraryDependencies ++= Seq(
+      //  "org.mongodb.scala" %% "mongo-scala-driver" % "4.0.5",
+      "com.github.scopt" %% "scopt" % "3.7.1",
+      "ch.qos.logback" % "logback-classic" % "1.3.0-alpha5",
+      "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
+      "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
+      "io.morgaroth" %% "gnome-scala" % "1.1.1-SNAPSHOT",
+      "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
+      "joda-time" % "joda-time" % "2.10.8",
+    ) ++ Seq(
+      "io.circe" %% "circe-generic",
+      "io.circe" %% "circe-parser",
+    ).map(_ % circeVersion),
+  )
+
+lazy val main = project.in(file("main"))
+  .dependsOn(domain)
+  .enablePlugins(JavaAppPackaging, DebianPlugin)
+  .settings(
+    maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
+    debianPackageDependencies += "java8-runtime-headless",
+
+    libraryDependencies ++= Seq(
+      "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
+      "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
+    ),
+
+    deploy := {
+      (packageBin in Debian).toTask.value
+      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
+    },
+
+    sources in(Compile, doc) := Seq.empty,
+    publishArtifact in(Compile, packageDoc) := false,
+
+    discoveredMainClasses in Compile := {
+      (discoveredMainClasses in Compile).value.filterNot(disabledMainClasses)
+    },
+  )
+
+lazy val main2 = project.in(file("mongov2"))
+  .dependsOn(domain)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.mongodb.scala" %% "mongo-scala-driver" % "4.0.5",
+    )
+  )

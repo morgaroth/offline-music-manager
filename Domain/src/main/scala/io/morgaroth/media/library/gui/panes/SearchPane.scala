@@ -51,7 +51,7 @@ class SearchPane(
       resultsStore.setValue(r, endAtColumn, t.endAt.getOrElse(""))
       resultsStore.setValue(r, fadeColumn, t.fadeOutSeconds.map(_.toString).getOrElse(""))
       resultsStore.setValue(r, volumeColumn, t.volumeChange.map(_.toString).getOrElse(""))
-      resultsStore.setValue(r, idColumn, t.id)
+      resultsStore.setValue(r, idColumn, t._id)
     }
   }
 

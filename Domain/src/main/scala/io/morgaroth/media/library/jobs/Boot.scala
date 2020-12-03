@@ -1,9 +1,5 @@
 package io.morgaroth.media.library.jobs
 
-import java.io.File
-import java.nio.file.attribute.FileTime
-import java.nio.file.{Files, StandardCopyOption}
-
 import cats.syntax.either._
 import cats.syntax.option._
 import com.typesafe.config.ConfigFactory
@@ -11,20 +7,47 @@ import com.typesafe.scalalogging.LazyLogging
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
-import io.morgaroth.media.library.storage.{Track, TracksDB}
+import io.morgaroth.media.library.storage.{Track, TracksStorage}
 import io.morgaroth.media.library.{Args, Configuration}
 import org.joda.time.LocalDateTime
 
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
+import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
+import scala.concurrent.{Await, Future}
 import scala.sys.process._
 
-class Boot extends LazyLogging {
-  private val tcfg = ConfigFactory.load()
-  private val mongoCfg = tcfg.getConfig("music-library.mongo")
-  private val storage = new TracksDB(mongoCfg)
+object MetaDataFetcher {
+
+  def getMetadata(url: String) = {
+    val cfg = Configuration()
+    val result = getYTMetadata(cfg.downloaderExec, url, None)
+    println(result)
+    result
+  }
+
+  def getYTMetadata(downloaderExec: String, url: String, format: Option[String]): Either[Throwable, YoutubeDLMeta] = {
+    Either.catchNonFatal {
+      (Seq(downloaderExec, "--print-json", "-s", url) ++ format.toSeq.flatMap(x => Seq("-o", x))).!!<
+    }.flatMap { json =>
+      decode[YoutubeDLMeta](json).left.map {
+        case c: DecodingFailure => c.copy(message = json)
+        case e => e
+      }
+    }
+  }
+
+}
+
+class Boot(storage: TracksStorage) extends LazyLogging {
 
   val algorithmVersion = "4"
 
   def main(args: Array[String]): Unit = {
+    System.setProperty("scala.concurrent.context.numThreads", "x5")
+    System.setProperty("scala.concurrent.context.maxThreads", "x10")
     val cfg = Args(args).get
     println(cfg)
     val definitions = storage.findAllReadyToFetch.sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
@@ -32,44 +55,72 @@ class Boot extends LazyLogging {
     doAllWork(filtered, cfg)
   }
 
-  private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
-    definitions.foreach { implicit definition =>
-      val versionId = definition.UFID + algorithmVersion
-      val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
-      if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId)) {
-        logger.info("File {} already downloaded", definition.info)
-      } else {
-        val work = for {
-          a <- download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug)
-          (source, ytMeta) = a
-          mp3file = convertToMP3(source, cfg, definition)
-          trimmed = strip(mp3file, definition, cfg.debug)
-          finalFile = dist(trimmed, destination)
-          _ <- addTags(
-            album = definition.album.some.filter(_.nonEmpty).getOrElse("Twórczość"),
-            author = definition.artist,
-            title = definition.title,
-            file = finalFile,
-            id = versionId,
-          )
-          _ <- setTimestamps(finalFile, definition.createdAt, definition.updatedAt)
-          _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition.id, Some(ytMeta.title))
-          _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition.id, Some(ytMeta.title))
-          _ = logger.info("File {} ready", definition.info)
-        } yield ()
+  val active = new AtomicInteger()
+  val activeDownloads = new AtomicInteger()
 
-        work.leftMap {
-          case t: URLFetchError =>
-            logger.warn(s"The track needs to be updated ${t.getMessage}")
-            t
-          case t: Throwable =>
-            logger.error(s"Error $t during handling ${definition.url}, going forward...")
-            t
-        }.valueOr(throw _)
+  def handleUrl(cfg: Configuration)(implicit definition: Track) = {
+    active.incrementAndGet()
+    val versionId = definition.UFID + algorithmVersion
+    val destination = new File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
+    if (destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId)) {
+      logger.info("File {} already downloaded", definition.info)
+    } else {
+      val work = for {
+        a <- download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug)
+        (source, ytMeta) = a
+        mp3file = convertToMP3(source, cfg, definition)
+        trimmed = strip(mp3file, definition, cfg.debug)
+        finalFile = dist(trimmed, destination)
+        _ <- addTags(
+          album = definition.album.some.filter(_.nonEmpty).getOrElse("Twórczość"),
+          author = definition.artist,
+          title = definition.title,
+          file = finalFile,
+          id = versionId,
+        )
+        _ <- setTimestamps(finalFile, definition.createdAt, definition.updatedAt)
+        _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition._id, Some(ytMeta.title))
+        _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition._id, Some(ytMeta.title))
+        _ = logger.info("File {} ready", definition.info)
+      } yield ()
+
+      val result = work.leftMap {
+        case t: URLFetchError =>
+          logger.warn(s"The track needs to be updated ${t.getMessage}")
+          t
+        case t: Throwable =>
+          logger.error(s"Error $t during handling ${definition.url}, going forward...")
+          t
+        //        }.valueOr(throw _)
       }
-
-      copyFileToPlaylistDirectories(cfg.destinationDir, destination, definition).valueOr(throw _)
+      active.decrementAndGet()
+      result
     }
+
+    copyFileToPlaylistDirectories(cfg.destinationDir, destination, definition).valueOr(throw _)
+  }
+
+  private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
+    val sem = new Semaphore(20, true)
+    val id = new AtomicInteger()
+    val inc = new Semaphore(1, true)
+    import cats.instances.vector._
+    import scala.concurrent.duration._
+    import cats.syntax.traverse._
+    import scala.concurrent.ExecutionContext.Implicits.global
+    import cats.instances.future.catsStdInstancesForFuture
+    val work = definitions.map { defi =>
+      Future {
+        sem.acquire()
+        handleUrl(cfg)(defi)
+        sem.release()
+        inc.acquire()
+        val thisId = id.incrementAndGet()
+        logger.info(s"$thisId/${definitions.size} ready, ${active.get()} active, ${activeDownloads.get()} active downloads")
+        inc.release()
+      }
+    }.sequence
+    Await.result(work, 1.day)
   }
 
   def copyFileToPlaylistDirectories(destinationDir: File, file: File, track: Track): Either[Throwable, Unit] = {
@@ -80,7 +131,7 @@ class Boot extends LazyLogging {
             logger.info(s"Copying ${file.getName} to $playlist")
             val playlistDir = new File(destinationDir, playlist)
             if (!playlistDir.exists()) {
-              logger.info(s"$playlistDir does not exist, creaing...")
+              logger.info(s"$playlistDir does not exist, creating...")
               playlistDir.mkdir()
             }
             Files.copy(file.toPath, new File(playlistDir, file.getName).toPath)
@@ -96,32 +147,24 @@ class Boot extends LazyLogging {
     }
   }
 
-  def getYTMetadata(downloaderExec: String, url: String, format: String): Either[Throwable, YoutubeDLMeta] = {
-    Either.catchNonFatal {
-      Seq(downloaderExec, "--print-json", "-s", url, "-o", format).!!<
-    }.flatMap { json =>
-      decode[YoutubeDLMeta](json).left.map {
-        case c: DecodingFailure => c.copy(message = json)
-        case e => e
-      }
-    }
-  }
-
   def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false)(implicit track: Track): Either[Throwable, (File, YoutubeDLMeta)] = {
 
     def doWork(retries: Int = 5): Either[Throwable, (File, YoutubeDLMeta)] = {
       val work = for {
-        ytMetadata <- getYTMetadata(downloaderExec, url, "%(title)s (%(id)s) - RAW.%(ext)s")
-        destinationPath = new File(dest, ytMetadata._filename)
+        ytMetadata <- MetaDataFetcher.getYTMetadata(downloaderExec, url, Some("%(title)s (%(id)s) - RAW.%(ext)s"))
+        destinationPath = new File(dest, ytMetadata._filename.get)
         _ <- if (destinationPath.exists()) {
           logger.info(s"Using previously downloaded file $destinationPath.")
           ().asRight
         } else {
+          activeDownloads.incrementAndGet()
           val args = Seq(downloaderExec, /*"--print-json",*/ "--restrict-filenames", "-f", "mp4", "-o", destinationPath.toPath.toString, url)
           if (debug) {
             logger.debug("--> {}", args.mkString(" "))
           }
-          Either.catchNonFatal(args.!!<)
+          val result = Either.catchNonFatal(args.!!<)
+          activeDownloads.decrementAndGet()
+          result
         }
       } yield (destinationPath, ytMetadata)
 
@@ -197,8 +240,8 @@ class Boot extends LazyLogging {
       val targetTrackSeconds = diff1.head * 3600 + diff1(1) * 60 + diff1(2)
       Seq("-filter_complex", s"afade=t=out:st=${targetTrackSeconds - secs}:d=$secs", "-q:a", "0", "-acodec", "libmp3lame")
     }.getOrElse(Seq("-acodec", "copy"))
-    ffmpeg(a.map("-ss" :: _.toString :: Nil).toSeq.flatten: _*)(source)(
-      codecsInfo ++ b.map("-to" :: _.toString :: Nil).toSeq.flatten: _*,
+    ffmpeg(a.toList.flatMap("-ss" :: _ :: Nil): _*)(source)(
+      codecsInfo ++ b.toList.flatMap("-to" :: _ :: Nil): _*,
     )(t1)(quiet = true, debug = debug)
     t1
   }
@@ -247,9 +290,11 @@ class Boot extends LazyLogging {
 case class YoutubeDLMeta(
                           description: String,
                           title: String,
+                          track: Option[String],
+                          artist: Option[String],
                           thumbnail: String,
                           fulltitle: String,
-                          _filename: String,
+                          _filename: Option[String],
                         )
 
 class URLFetchError(title: String, artist: String, album: String, searchUrl: String)

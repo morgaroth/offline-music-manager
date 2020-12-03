@@ -5,6 +5,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.gnome.scala._
 import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.gui.GuiBackend
+import io.morgaroth.media.library.jobs.{MetaDataFetcher, YoutubeDLMeta}
 import io.morgaroth.media.library.storage.{Deleted, Draft, Final, Track}
 import org.gnome.gtk
 
@@ -36,7 +37,13 @@ class TrackDetailsPane(
   private val nameStripped = """^[\s-/]*(.+?)[\s-/]*$""".r
 
   private def normalizeName(rawValue: String) = {
-    rawValue.trim match {
+    rawValue
+      .replaceAllLiterally("Official Video", "")
+      .replaceAllLiterally("official video", "")
+      .replaceAllLiterally("official audio", "")
+      .replaceAllLiterally("Lyrics", "")
+      .replaceAllLiterally("()", "")
+      .trim match {
       case nameStripped(name) => name
       case "" => ""
     }
@@ -49,7 +56,7 @@ class TrackDetailsPane(
   private val albumEdit = Edit().disabled.withSizeRequest(inputWidth, lineHeight)
 
   private val updateUrlBtn = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
-    urlEdit.getText.trim.some.filter(_ != track.url).map(backend.updateUrl(track.id, _)).map(load)
+    urlEdit.getText.trim.some.filter(_ != track.url).map(backend.updateUrl(track._id, _)).map(load)
   }).disabled.withSizeRequest(saveBtnWidth, lineHeight)
 
   private val openBtn = Btn("Otwórz!").onClick(_ => trackUnderWork.foreach {
@@ -62,22 +69,22 @@ class TrackDetailsPane(
 
   private val artistSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
     normalizeName(artistEdit.getText).some.filter(_ != track.artist).map { artist =>
-      logger.info(s"updating ${track.id}/artist to $artist")
-      backend.updateArtist(track.id, artist)
+      logger.info(s"updating ${track._id}/artist to $artist")
+      backend.updateArtist(track._id, artist)
     }.map(load)
   }).disabled.withSizeRequest(saveBtnWidth, lineHeight)
 
   private val albumSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
     normalizeName(albumEdit.getText).some.filter(_ != track.album).map { album =>
-      logger.info(s"updating ${track.id}/album to $album")
-      backend.updateAlbum(track.id, album)
+      logger.info(s"updating ${track._id}/album to $album")
+      backend.updateAlbum(track._id, album)
     }.map(load)
   }).disabled.withSizeRequest(saveBtnWidth, lineHeight)
 
   private val titleSave = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
     normalizeName(titleEdit.getText).some.filter(_ != track.title).map { title =>
-      logger.info(s"updating ${track.id}/title to $title")
-      backend.updateTitle(track.id, title)
+      logger.info(s"updating ${track._id}/title to $title")
+      backend.updateTitle(track._id, title)
     }.map(load)
   }).disabled.withSizeRequest(saveBtnWidth, lineHeight)
 
@@ -127,11 +134,11 @@ class TrackDetailsPane(
       val rawInput = Option(startAtEdit.getText)
       rawInput.map(normalizeTimeValue).foreach {
         case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
-          logger.info(s"updating ${track.id}/startAt to $validValue")
-          load(backend.updateStartAt(track.id, Some(validValue)))
+          logger.info(s"updating ${track._id}/startAt to $validValue")
+          load(backend.updateStartAt(track._id, Some(validValue)))
         case "" =>
-          logger.info(s"removing ${track.id}/startAt")
-          load(backend.updateStartAt(track.id, None))
+          logger.info(s"removing ${track._id}/startAt")
+          load(backend.updateStartAt(track._id, None))
         case invalidOne =>
           logger.warn(s"invalid data value='$invalidOne' (raw input: ${rawInput})")
       }
@@ -143,11 +150,11 @@ class TrackDetailsPane(
       val rawInput = Option(endAtEdit.getText)
       rawInput.map(normalizeTimeValue).foreach {
         case validValue if validValue.matches("""^\d?\d:\d\d$""") =>
-          logger.info(s"updating ${track.id}/endAt to $validValue")
-          load(backend.updateEndAt(track.id, Some(validValue)))
+          logger.info(s"updating ${track._id}/endAt to $validValue")
+          load(backend.updateEndAt(track._id, Some(validValue)))
         case "" =>
-          logger.info(s"removing ${track.id}/endAt")
-          load(backend.updateEndAt(track.id, None))
+          logger.info(s"removing ${track._id}/endAt")
+          load(backend.updateEndAt(track._id, None))
         case invalidOne =>
           logger.warn(s"invalid data value='$invalidOne' (raw input: ${rawInput})")
       }
@@ -159,11 +166,11 @@ class TrackDetailsPane(
       val rawInput = Option(fadeEdit.getText)
       rawInput.foreach {
         case validValue if validValue.matches("""^\d+$""") =>
-          logger.info(s"updating ${track.id}/fadeOutSeconds to $validValue")
-          load(backend.updateFadeOutSeconds(track.id, Some(validValue.toInt)))
+          logger.info(s"updating ${track._id}/fadeOutSeconds to $validValue")
+          load(backend.updateFadeOutSeconds(track._id, Some(validValue.toInt)))
         case "" =>
-          logger.info(s"removing ${track.id}/fadeOutSeconds")
-          load(backend.updateFadeOutSeconds(track.id, None))
+          logger.info(s"removing ${track._id}/fadeOutSeconds")
+          load(backend.updateFadeOutSeconds(track._id, None))
         case invalidOne =>
           logger.warn(s"invalid data value='$invalidOne'm raw='$rawInput'")
       }
@@ -190,18 +197,18 @@ class TrackDetailsPane(
   //  }
 
   deleteBtn.onClick(_ => trackUnderWork.map { track =>
-    logger.info(s"updating ${track.id}/status to ${Deleted.dbRepr}")
-    backend.updateStatus(track.id, Deleted)
+    logger.info(s"updating ${track._id}/status to ${Deleted.dbRepr}")
+    backend.updateStatus(track._id, Deleted)
   }.map(_ => loadDraft()))
 
   doneBtn.onClick(_ => trackUnderWork.map { track =>
-    logger.info(s"updating ${track.id}/status to ${Final.dbRepr}")
-    backend.updateStatus(track.id, Final)
+    logger.info(s"updating ${track._id}/status to ${Final.dbRepr}")
+    backend.updateStatus(track._id, Final)
   }.map(load))
 
   draftBtn.onClick(_ => trackUnderWork.map { track =>
-    logger.info(s"updating ${track.id}/status to ${Draft.dbRepr}")
-    backend.updateStatus(track.id, Draft)
+    logger.info(s"updating ${track._id}/status to ${Draft.dbRepr}")
+    backend.updateStatus(track._id, Draft)
   }.map(load))
 
   private def loadControls() = {
@@ -256,10 +263,29 @@ class TrackDetailsPane(
     draftBtn.enable(!trackUnderWork.map(_.status).forall(_ == Draft))
   }
 
+
+  def getArtist(meta: YoutubeDLMeta) =
+    meta.artist.filter(meta.fulltitle.contains).orElse(Some(meta.title)).map(normalizeName)
+
+  def getTitle(meta: YoutubeDLMeta) = {
+    if (meta.track.exists(meta.fulltitle.contains)) meta.track else {
+      Some(meta.title).filter(meta.fulltitle.contains)
+    }.orElse(Some(meta.title))
+      .map(value => meta.artist.map(maybeArtist => value.replaceAllLiterally(maybeArtist, "")).getOrElse(value))
+      .map(normalizeName)
+  }
+
   private val storeUrl = Edit()
   private val storeBtn = Btn("Zapisz!").onClick(_ => {
     storeUrl.getText.trim.some.filter(_.nonEmpty).foreach { data =>
-      backend.storeUrl(data).fold(
+      val result = for {
+        stored <- backend.storeUrl(data)
+        meta <- MetaDataFetcher.getMetadata(data)
+        updated1 <- getArtist(meta).map(backend.updateArtist(stored._id, _)).getOrElse(Right(stored))
+        updated2 <- getTitle(meta).map(backend.updateTitle(stored._id, _)).getOrElse(Right(updated1))
+      } yield updated2
+
+      result.fold(
         err => logger.error("got error from storage", err),
         track => {
           trackUnderWork = track.some

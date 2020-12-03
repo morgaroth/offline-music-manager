@@ -12,19 +12,21 @@ case object Undefined extends MusicLibraryAction
 
 case class Configuration(
                           action: MusicLibraryAction = Undefined,
-                          destinationDir: File = new File(new File(System.getProperty("user.home")), "music-library"),
+                          destinationDir: File = new File(new File(new File(System.getProperty("user.home")), "music-library"), "all-music"),
+                          cacheDir: File = new File(new File(new File(System.getProperty("user.home")), "music-library"), "cache"),
                           downloaderExec: String = "youtube-dl",
                           regex: String = ".*",
                           force: Boolean = false,
                           forceLevel: Int = 0,
                           debug: Boolean = false,
                         ) {
-  def cacheLocation = new File(destinationDir, "cache")
+  def cacheLocation = cacheDir
 
   override def toString =
     s"""configuration:
-    - action = ${action}
+    - action = $action
     - destinationDir = ${destinationDir.getAbsolutePath}
+    - cacheDir = ${cacheDir.getAbsolutePath}
     - downloaderExec = $downloaderExec
     - filterRegex = $regex
     - force = $force

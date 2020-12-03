@@ -1,19 +1,14 @@
 package io.morgaroth.media.library.jobs
 
 import com.typesafe.config.ConfigFactory
-import io.morgaroth.media.library.gui.MongoBackedGuiBackend
-import io.morgaroth.media.library.gui.windows.AppWindow
 import io.morgaroth.media.library.storage.TracksDB
-import org.gnome.gtk.Gtk
 
-object GUIApp {
+object AllSongsGUI {
   def main(args: Array[String]): Unit = {
-    Gtk.init(args)
     val cfg = ConfigFactory.load()
     val mongoCfg = cfg.getConfig("music-library.mongo")
     val storage = new TracksDB(mongoCfg)
-    val backend = new MongoBackedGuiBackend(storage)
-    val guiApp = new AppWindow(backend)
-    guiApp.show()
+    val gui = new BaseGUIApp(storage)
+    gui.main()
   }
 }

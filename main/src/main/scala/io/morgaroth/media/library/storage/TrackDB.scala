@@ -13,82 +13,8 @@ import io.morgaroth.media.library.ErrorOr
 import org.joda.time.LocalDateTime
 import salat.annotations.Key
 
-case class TrackNotFound(desc: String) extends Exception(s"track not found $desc")
 
-case class Track(
-                  url: String,
-                  title: String,
-                  artist: String,
-                  album: String,
-                  startAt: Option[String],
-                  endAt: Option[String],
-                  fadeOutSeconds: Option[Int],
-                  volumeChange: Option[BigDecimal],
-                  status: TrackStatus,
-                  idCheck: Option[String],
-                  playlists: Set[String] = Set.empty,
-                  rawTitle: Option[String] = Some(""),
-                  rawDescription: Option[String] = Some(""),
-                  updatedAt: LocalDateTime = LocalDateTime.now(),
-                  createdAt: LocalDateTime = LocalDateTime.now(),
-                  @Key("_id") id: UUID = UUID.randomUUID(),
-                ) {
-  lazy val searchUrl = s"https://www.youtube.com/results?search_query=${URLEncoder.encode(s"$title $artist", "utf-8")}"
-
-  lazy val isReadyToFetch: Boolean = title.nonEmpty && artist.nonEmpty && status == Final
-
-  lazy val info = s"$artist - $title"
-  lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$album$startAt$endAt$fadeOutSeconds:$volumeChange")
-}
-
-object Track {
-  def apply(
-             url: String,
-             title: String,
-             artist: String,
-             status: TrackStatus,
-           ): Track = {
-    apply(url, title, artist, "", status)
-  }
-
-  def apply(
-             url: String,
-             title: String,
-             artist: String,
-             album: String,
-             status: TrackStatus,
-           ): Track = {
-    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Set.empty)
-  }
-
-  def apply(
-             url: String,
-             title: String,
-             artist: String,
-             album: String,
-             status: TrackStatus,
-             startAt: Option[String],
-             endAt: Option[String],
-             fadeOutSeconds: Option[Int],
-             volumeChange: Option[BigDecimal],
-             playlists: Set[String],
-           ): Track = {
-    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists)
-  }
-
-  def apply(url: String): Track = {
-    new Track(url, "", "", "", None, None, None, None, Draft, None, Set.empty)
-  }
-}
-
-object TrackId {
-  val sep = "___"
-
-  def apply(artist: String, title: String): Option[String] =
-    if (title.nonEmpty || artist.nonEmpty) s"$artist$sep$title".some else none
-}
-
-class TracksDB(val connectionCfg: Config) extends LazyLogging {
+class TracksDB(val connectionCfg: Config) extends TracksStorage with LazyLogging {
   def all: Vector[Track] = dao.find(MongoDBObject.empty).toVector
 
   UUIDConversionHelpers.register()
@@ -115,10 +41,8 @@ class TracksDB(val connectionCfg: Config) extends LazyLogging {
     )
 
   def save(document: Track): ErrorOr[Track] = {
-    Either.catchNonFatal(dao.save(document)).flatMap(_ => getById(document.id))
+    Either.catchNonFatal(dao.save(document)).flatMap(_ => getById(document._id))
   }
-
-  def store(url: String): ErrorOr[Track] = save(Track(url))
 
   private def updateFields(id: UUID, kv: (String, AnyRef), kvRest: (String, AnyRef)*): ErrorOr[Imports.WriteResult] = {
     val updateQuery = MongoDBObject("updatedAt" -> LocalDateTime.now(), kv)
