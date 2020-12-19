@@ -1,6 +1,7 @@
 package io.morgaroth.media.library.storage
 
 import com.typesafe.config.Config
+import io.morgaroth.media.library.gui.FutureAwaitable
 import io.morgaroth.testing.docker.mongo.MongoSupport
 import org.scalatest.{FlatSpec, Inside, Matchers}
 
@@ -15,7 +16,7 @@ class TracksDBTest extends FlatSpec with Matchers with MongoSupport[TracksDB] wi
     store(3, playlists = Set("no-3"))
     store(4, playlists = Set("playlist-4", "noop-4"))
 
-    val value = MongoDB.genericSearch("aylis", 1)
+    val value = MongoDB.genericSearch("aylis", 1).await()
     value shouldBe 'right
     value.right.get.length shouldBe 2
     value.right.get.map(_.url) should contain only("url-2", "url-4")
@@ -28,7 +29,7 @@ class TracksDBTest extends FlatSpec with Matchers with MongoSupport[TracksDB] wi
     store(4, playlists = Set("playlist-1", "playlist-4"))
     store(5)
 
-    val value = MongoDB.findAllPlaylists()
+    val value = MongoDB.findAllPlaylists().await()
     value shouldBe 'right
     value.right.get should have size 4
     value.right.get("playlist-1") should have size 2

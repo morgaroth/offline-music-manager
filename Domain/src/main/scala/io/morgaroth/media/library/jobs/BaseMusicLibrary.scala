@@ -2,7 +2,9 @@ package io.morgaroth.media.library.jobs
 
 import io.morgaroth.media.library.storage.TracksStorage
 
-class BaseMusicLibrary(storage: TracksStorage) {
+import scala.concurrent.Future
+
+class BaseMusicLibrary(storage: TracksStorage[Future]) {
   def main(args: Array[String]): Unit = {
     args.headOption match {
       case Some("fetch" | "boot" | "work") =>

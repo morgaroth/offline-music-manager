@@ -88,34 +88,34 @@ object TrackId {
     if (title.nonEmpty || artist.nonEmpty) s"$artist$sep$title".some else none
 }
 
-trait TracksStorage {
+trait TracksStorage[F[_]] {
 
-  def getById(id: UUID): ErrorOr[Track]
-  def getBy(artist: String, title: String): ErrorOr[Track]
-  def save(document: Track): ErrorOr[Track]
+  def getById(id: UUID): F[ErrorOr[Track]]
+  def getBy(artist: String, title: String): F[ErrorOr[Track]]
+  def save(document: Track): F[ErrorOr[Track]]
 
-  def store(url: String): ErrorOr[Track] = save(Track(url))
-  def updateArtist(id: UUID, artist: String): ErrorOr[Track]
-  def updateTitle(id: UUID, title: String): ErrorOr[Track]
-  def updateAlbum(id: UUID, album: String): ErrorOr[Track]
-  def updateStartAt(id: UUID, data: Option[String]): ErrorOr[Track]
-  def updateEndAt(id: UUID, data: Option[String]): ErrorOr[Track]
-  def updateUrl(id: UUID, url: String): ErrorOr[Track]
-  def updateStatus(id: UUID, status: TrackStatus): ErrorOr[Track]
-  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track]
-  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track]
-  def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track]
-  def updateRawTitle(id: UUID, newData: Option[String]): ErrorOr[Track]
-  def updateRawDescription(id: UUID, newData: Option[String]): ErrorOr[Track]
-  def findAllPlaylists(): ErrorOr[Map[String, Vector[Track]]]
+  def store(url: String): F[ErrorOr[Track]] = save(Track(url))
+  def updateArtist(id: UUID, artist: String): F[ErrorOr[Track]]
+  def updateTitle(id: UUID, title: String): F[ErrorOr[Track]]
+  def updateAlbum(id: UUID, album: String): F[ErrorOr[Track]]
+  def updateStartAt(id: UUID, data: Option[String]): F[ErrorOr[Track]]
+  def updateEndAt(id: UUID, data: Option[String]): F[ErrorOr[Track]]
+  def updateUrl(id: UUID, url: String): F[ErrorOr[Track]]
+  def updateStatus(id: UUID, status: TrackStatus): F[ErrorOr[Track]]
+  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): F[ErrorOr[Track]]
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): F[ErrorOr[Track]]
+  def updatePlaylists(id: UUID, newData: Set[String]): F[ErrorOr[Track]]
+  def updateRawTitle(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+  def updateRawDescription(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+  def findAllPlaylists(): F[ErrorOr[Map[String, Vector[Track]]]]
 
   def search(
               artist: Option[String] = None, title: Option[String] = None,
               statuses: Option[Set[TrackStatus]] = None,
               limit: java.lang.Integer = null
-            ): ErrorOr[Vector[Track]]
+            ): F[ErrorOr[Vector[Track]]]
 
-  def findAllReadyToFetch: Vector[Track]
-  def genericSearch(text: String, page: Int): ErrorOr[Vector[Track]]
+  def findAllReadyToFetch: F[Vector[Track]]
+  def genericSearch(text: String, page: Int): F[ErrorOr[Vector[Track]]]
 }
 

@@ -5,7 +5,9 @@ import io.morgaroth.media.library.gui.windows.AppWindow
 import io.morgaroth.media.library.storage.TracksStorage
 import org.gnome.gtk.Gtk
 
-class BaseGUIApp(storage: TracksStorage) {
+import scala.concurrent.Future
+
+class BaseGUIApp(storage: TracksStorage[Future]) {
   def main(): Unit = {
     Gtk.init(Array.empty[String])
     val backend = new GuiBackend(storage)

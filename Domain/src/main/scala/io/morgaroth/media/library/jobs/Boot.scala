@@ -7,6 +7,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
+import io.morgaroth.media.library.gui.FutureAwaitable
 import io.morgaroth.media.library.storage.{Track, TracksStorage}
 import io.morgaroth.media.library.{Args, Configuration}
 import org.joda.time.LocalDateTime
@@ -41,7 +42,7 @@ object MetaDataFetcher {
 
 }
 
-class Boot(storage: TracksStorage) extends LazyLogging {
+class Boot(storage: TracksStorage[Future]) extends LazyLogging {
 
   val algorithmVersion = "4"
 
@@ -50,7 +51,7 @@ class Boot(storage: TracksStorage) extends LazyLogging {
     System.setProperty("scala.concurrent.context.maxThreads", "x10")
     val cfg = Args(args).get
     println(cfg)
-    val definitions = storage.findAllReadyToFetch.sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
+    val definitions = storage.findAllReadyToFetch.await().sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
     val filtered = definitions.filter(_.info.matches(cfg.regex))
     doAllWork(filtered, cfg)
   }
@@ -79,8 +80,8 @@ class Boot(storage: TracksStorage) extends LazyLogging {
           id = versionId,
         )
         _ <- setTimestamps(finalFile, definition.createdAt, definition.updatedAt)
-        _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition._id, Some(ytMeta.title))
-        _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition._id, Some(ytMeta.title))
+        _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition._id, Some(ytMeta.title)).await()
+        _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition._id, Some(ytMeta.title)).await()
         _ = logger.info("File {} ready", definition.info)
       } yield ()
 
