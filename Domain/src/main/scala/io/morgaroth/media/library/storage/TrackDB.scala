@@ -4,7 +4,7 @@ import cats.syntax.option._
 import io.morgaroth.media.library.ErrorOr
 
 import java.net.URLEncoder
-import java.time.LocalDateTime
+import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
 import java.util.UUID
 import scala.language.higherKinds
 
@@ -24,20 +24,23 @@ case class Track(
                   playlists: Set[String] = Set.empty,
                   rawTitle: Option[String] = Some(""),
                   rawDescription: Option[String] = Some(""),
-                  updatedAt: LocalDateTime = LocalDateTime.now(),
-                  createdAt: LocalDateTime = LocalDateTime.now(),
+                  updatedAt: ZonedDateTime = ZonedDateTime.now(),
+                  createdAt: ZonedDateTime = ZonedDateTime.now(),
                   _id: UUID = UUID.randomUUID(),
                 ) {
   lazy val searchUrl = s"https://www.youtube.com/results?search_query=${URLEncoder.encode(s"$title $artist", "utf-8")}"
 
   lazy val isReadyToFetch: Boolean = title.nonEmpty && artist.nonEmpty && status == Final
 
+  lazy val createdAtLocal: LocalDateTime = createdAt.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime
+  lazy val updatedAtLocal: LocalDateTime = updatedAt.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime
+
   lazy val info = s"$artist - $title"
   lazy val UFID: String = io.morgaroth.media.library.md5HashString(s"$url$title$artist$album$startAt$endAt$fadeOutSeconds:$volumeChange")
 
   def repr: String = {
     {
-      new StringBuilder() ++= title ++= ", " ++= artist ++= ", " ++= createdAt.toLocalDate.toString ++= ", " ++= url
+      new StringBuilder() ++= title ++= ", " ++= artist ++= ", " ++= createdAtLocal.toLocalDate.toString ++= ", " ++= url
     }.mkString
   }
 }

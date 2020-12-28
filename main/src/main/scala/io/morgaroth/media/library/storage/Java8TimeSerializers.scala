@@ -3,41 +3,41 @@ package io.morgaroth.media.library.storage
 import com.mongodb.casbah.commons.conversions.MongoConversionHelper
 import org.bson.{BSON, Transformer}
 
-import java.time.{ZoneId, ZoneOffset}
+import java.time.ZoneId
 import java.util.Date
 
 
-object JavaLocalDateTimeHelpers extends JavaLocalDateTimeSerializer with JavaLocalDateTimeDeserializer
+object JavaZonedDateTimeHelpers extends JavaZonedDateTimeSerializer with JavaZonedDateTimeDeserializer
 
-trait JavaLocalDateTimeSerializer extends MongoConversionHelper {
+trait JavaZonedDateTimeSerializer extends MongoConversionHelper {
 
-  private val encodeTypeLocalDateTime = classOf[java.time.LocalDateTime]
+  private val encodeTypeZonedDateTime = classOf[java.time.ZonedDateTime]
 
   private val transformer = new Transformer {
-    log.trace("Encoding a java.time.LocalDateTime.")
+    log.trace("Encoding a java.time.v.")
 
     def transform(o: AnyRef): AnyRef = o match {
-      case l: java.time.LocalDateTime => Date.from(l.atZone(ZoneId.systemDefault()).toInstant)
-      case _ => o
+      case l: java.time.ZonedDateTime => Date.from(l.toInstant)
+      case another => another
     }
 
   }
 
   override def register() {
-    log.debug("Hooking up java.time.LocalDateTime serializer.")
+    log.debug("Hooking up java.time.ZonedDateTime serializer.")
 
-    BSON.addEncodingHook(encodeTypeLocalDateTime, transformer)
+    BSON.addEncodingHook(encodeTypeZonedDateTime, transformer)
     super.register()
   }
 
   override def unregister() {
-    log.debug("De-registering java.time.LocalDateTime serializer.")
-    BSON.removeEncodingHooks(encodeTypeLocalDateTime)
+    log.debug("De-registering java.time.ZonedDateTime serializer.")
+    BSON.removeEncodingHooks(encodeTypeZonedDateTime)
     super.unregister()
   }
 }
 
-trait JavaLocalDateTimeDeserializer extends MongoConversionHelper {
+trait JavaZonedDateTimeDeserializer extends MongoConversionHelper {
 
   private val encodeType = classOf[java.util.Date]
   private val transformer = new Transformer {
@@ -45,20 +45,20 @@ trait JavaLocalDateTimeDeserializer extends MongoConversionHelper {
 
     def transform(o: AnyRef): AnyRef = o match {
       case jdkDate: java.util.Date =>
-        jdkDate.toInstant.atZone(ZoneId.systemDefault()).toLocalDateTime
-      case _ => o
+        jdkDate.toInstant.atZone(ZoneId.systemDefault())
+      case another => another
     }
   }
 
   override def register() {
-    log.debug("Hooking up java.time.LocalDateTime deserializer")
+    log.debug("Hooking up java.time.ZonedDateTime deserializer")
 
     BSON.addDecodingHook(encodeType, transformer)
     super.register()
   }
 
   override def unregister() {
-    log.debug("De-registering java.time.LocalDateTime deserializer.")
+    log.debug("De-registering java.time.ZonedDateTime deserializer.")
     BSON.removeDecodingHooks(encodeType)
     super.unregister()
   }

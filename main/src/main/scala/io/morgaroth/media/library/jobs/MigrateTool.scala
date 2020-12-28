@@ -17,8 +17,8 @@ object MigrateTool extends LazyLogging {
     val storage = new TracksDB(mongoCfg)
     val storage2 = new TracksDB(mongoCfg2)
     storage.all.await()
-      .filter(_.createdAt.isAfter(LocalDateTime.of(2019, 12, 10, 10, 0, 0)))
-      .filter(_.createdAt.isBefore(LocalDateTime.of(2020, 1, 10, 10, 0, 0)))
+      .filter(_.createdAtLocal.isAfter(LocalDateTime.of(2019, 12, 10, 10, 0, 0)))
+      .filter(_.createdAtLocal.isBefore(LocalDateTime.of(2020, 1, 10, 10, 0, 0)))
       .sortBy(_.createdAt)
       .foreach(storage2.save)
   }

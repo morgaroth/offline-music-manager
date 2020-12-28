@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.github.morgaroth.utils.mongodb.salat.MongoDAO
 import io.morgaroth.media.library.ErrorOr
 
-import java.time.LocalDateTime
+import java.time.{LocalDateTime, ZonedDateTime}
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -18,7 +18,7 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
   def all: Future[Vector[Track]] = Future.successful(dao.find(MongoDBObject.empty).toVector)
 
   UUIDConversionHelpers.register()
-  JavaLocalDateTimeHelpers.register()
+  JavaZonedDateTimeHelpers.register()
 
   private val dao: MongoDAO[Track] = new MongoDAO[Track](connectionCfg, "Tracks")
   dao.collection.createIndex("id")
@@ -51,7 +51,7 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
   }
 
   private def updateFields(id: UUID, kv: (String, AnyRef), kvRest: (String, AnyRef)*): ErrorOr[Imports.WriteResult] = {
-    val updateQuery = MongoDBObject("updatedAt" -> LocalDateTime.now(), kv)
+    val updateQuery = MongoDBObject("updatedAt" -> ZonedDateTime.now(), kv)
     kvRest.foreach(x => updateQuery.put(x._1, x._2))
 
     Either.catchNonFatal(dao.update(

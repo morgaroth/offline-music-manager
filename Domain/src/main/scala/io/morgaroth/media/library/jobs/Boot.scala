@@ -79,7 +79,7 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
           file = finalFile,
           id = versionId,
         )
-        _ <- setTimestamps(finalFile, definition.createdAt, definition.updatedAt)
+        _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
         _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition._id, Some(ytMeta.title)).await()
         _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition._id, Some(ytMeta.title)).await()
         _ = logger.info("File {} ready", definition.info)
