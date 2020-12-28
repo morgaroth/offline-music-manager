@@ -16,9 +16,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 object MongoRepo {
-  private def createDB(collection: String) = {
-    val cfg = ConfigFactory.load().getConfig("music-library.mongo")
-    new TracksDB(cfg, collection)
+  def createDB(collection: String, config: Config = ConfigFactory.load().getConfig("music-library.mongo")) = {
+    new TracksDB(config, collection)
   }
 
   def AllTracks = createDB("Tracks")
@@ -136,7 +135,7 @@ class TracksDB(val connectionCfg: Config, collection: String) extends TracksStor
 
   def findAllPlaylists(): Future[ErrorOr[Map[String, Vector[Track]]]] = Future.successful {
     Either.catchNonFatal(dao.find(MongoDBObject("playlists.0" -> MongoDBObject("$exists" -> true))).toVector)
-      .map(_.flatMap(x => x.playlists.getOrElse(Set.empty).map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
+      .map(_.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
   }
 
   def search(

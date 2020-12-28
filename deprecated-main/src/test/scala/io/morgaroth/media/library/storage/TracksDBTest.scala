@@ -7,7 +7,7 @@ import org.scalatest.{FlatSpec, Inside, Matchers}
 
 class TracksDBTest extends FlatSpec with Matchers with MongoSupport[TracksDB] with Inside {
   override def setUpMongoDataBase(cfg: Config): TracksDB = {
-    new TracksDB(cfg)
+    MongoRepo.createDB("TestTracks", cfg)
   }
 
   "TracksDB" should "use playlists array in generic search" in {
@@ -51,6 +51,6 @@ class TracksDBTest extends FlatSpec with Matchers with MongoSupport[TracksDB] wi
   }
 
   def store(num: Int, status: TrackStatus = Final, playlists: Set[String] = Set.empty) = {
-    MongoDB.save(genTrack(num, status, playlists)) shouldBe 'right
+    MongoDB.save(genTrack(num, status, playlists)).await() shouldBe 'right
   }
 }

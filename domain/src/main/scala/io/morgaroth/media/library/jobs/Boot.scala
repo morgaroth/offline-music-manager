@@ -126,7 +126,7 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
   }
 
   def copyFileToPlaylistDirectories(destinationDir: File, file: File, track: Track): Either[Throwable, Unit] = {
-    track.playlists.getOrElse(Set.empty).foldLeft(().asRight[Throwable]) {
+    track.playlists.foldLeft(().asRight[Throwable]) {
       case (acc, playlist) =>
         acc.flatMap { _ =>
           Either.catchNonFatal {

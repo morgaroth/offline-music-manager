@@ -21,9 +21,9 @@ case class Track(
                   volumeChange: Option[BigDecimal],
                   status: TrackStatus,
                   idCheck: Option[String],
-                  playlists: Option[Set[String]],
-                  rawTitle: Option[String] = Some(""),
-                  rawDescription: Option[String] = Some(""),
+                  playlists: Set[String],
+                  rawTitle: String,
+                  rawDescription: String,
                   updatedAt: ZonedDateTime = ZonedDateTime.now(),
                   createdAt: ZonedDateTime = ZonedDateTime.now(),
                   _id: UUID = UUID.randomUUID(),
@@ -62,7 +62,7 @@ object Track {
              album: String,
              status: TrackStatus,
            ): Track = {
-    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Some(Set.empty))
+    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Set.empty, "", "")
   }
 
   def apply(
@@ -77,11 +77,11 @@ object Track {
              volumeChange: Option[BigDecimal],
              playlists: Set[String],
            ): Track = {
-    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), Some(playlists))
+    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists, "", "")
   }
 
   def apply(url: String): Track = {
-    new Track(url, "", "", "", None, None, None, None, Draft, None, Some(Set.empty))
+    new Track(url, "", "", "", None, None, None, None, Draft, None, Set.empty, "", "")
   }
 }
 
