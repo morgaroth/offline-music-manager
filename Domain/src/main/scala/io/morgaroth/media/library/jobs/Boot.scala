@@ -2,19 +2,19 @@ package io.morgaroth.media.library.jobs
 
 import cats.syntax.either._
 import cats.syntax.option._
-import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.DecodingFailure
 import io.circe.generic.auto._
 import io.circe.parser._
+import io.morgaroth.media.library.common._
 import io.morgaroth.media.library.gui.FutureAwaitable
 import io.morgaroth.media.library.storage.{Track, TracksStorage}
 import io.morgaroth.media.library.{Args, Configuration}
-import org.joda.time.LocalDateTime
 
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
+import java.time.{LocalDateTime, ZoneOffset}
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.{Await, Future}
@@ -51,7 +51,7 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
     System.setProperty("scala.concurrent.context.maxThreads", "x10")
     val cfg = Args(args).get
     println(cfg)
-    val definitions = storage.findAllReadyToFetch.await().sortBy(_.updatedAt.toDateTime.getMillis)(Ordering[Long].reverse)
+    val definitions = storage.findAllReadyToFetch.await().sortBy(_.updatedAt).reverse
     val filtered = definitions.filter(_.info.matches(cfg.regex))
     doAllWork(filtered, cfg)
   }
@@ -105,11 +105,12 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
     val sem = new Semaphore(20, true)
     val id = new AtomicInteger()
     val inc = new Semaphore(1, true)
-    import cats.instances.vector._
-    import scala.concurrent.duration._
-    import cats.syntax.traverse._
-    import scala.concurrent.ExecutionContext.Implicits.global
     import cats.instances.future.catsStdInstancesForFuture
+    import cats.instances.vector._
+    import cats.syntax.traverse._
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+    import scala.concurrent.duration._
     val work = definitions.map { defi =>
       Future {
         sem.acquire()
@@ -143,8 +144,8 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
 
   def setTimestamps(file: File, created: LocalDateTime, modified: LocalDateTime): Either[Throwable, Unit] = {
     Either.catchNonFatal {
-      Files.setAttribute(file.toPath, "creationTime", FileTime.fromMillis(created.toDateTime.getMillis))
-      file.setLastModified(modified.toDateTime.getMillis)
+      Files.setAttribute(file.toPath, "creationTime", FileTime.fromMillis(created.toInstant(ZoneOffset.UTC).toEpochMilli))
+      file.setLastModified(modified.toInstant(ZoneOffset.UTC).toEpochMilli)
     }
   }
 

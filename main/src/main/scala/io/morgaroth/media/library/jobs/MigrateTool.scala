@@ -2,9 +2,11 @@ package io.morgaroth.media.library.jobs
 
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.morgaroth.media.library.common._
 import io.morgaroth.media.library.gui.FutureAwaitable
 import io.morgaroth.media.library.storage.TracksDB
-import org.joda.time.LocalDateTime
+
+import java.time.LocalDateTime
 
 object MigrateTool extends LazyLogging {
 
@@ -15,9 +17,9 @@ object MigrateTool extends LazyLogging {
     val storage = new TracksDB(mongoCfg)
     val storage2 = new TracksDB(mongoCfg2)
     storage.all.await()
-      .filter(_.createdAt.isAfter(new LocalDateTime(2019, 12, 10, 10, 0, 0)))
-      .filter(_.createdAt.isBefore(new LocalDateTime(2020, 1, 10, 10, 0, 0)))
-      .sortBy(_.createdAt.toDateTime.toInstant.getMillis)
+      .filter(_.createdAt.isAfter(LocalDateTime.of(2019, 12, 10, 10, 0, 0)))
+      .filter(_.createdAt.isBefore(LocalDateTime.of(2020, 1, 10, 10, 0, 0)))
+      .sortBy(_.createdAt)
       .foreach(storage2.save)
   }
 }

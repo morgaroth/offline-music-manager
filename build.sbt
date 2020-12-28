@@ -27,7 +27,6 @@ val domain = project.in(file("Domain"))
       "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
       "io.morgaroth" %% "gnome-scala" % "1.1.1-SNAPSHOT",
       "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
-      "joda-time" % "joda-time" % "2.10.8",
     ) ++ Seq(
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser",
@@ -46,10 +45,10 @@ lazy val main = project.in(file("main"))
       "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
     ),
 
-    deploy := {
-      (packageBin in Debian).toTask.value
-      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
-    },
+//    deploy := {
+//      (packageBin in Debian).toTask.value
+//      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
+//    },
 
     sources in(Compile, doc) := Seq.empty,
     publishArtifact in(Compile, packageDoc) := false,

@@ -5,10 +5,10 @@ import com.mongodb.casbah.Imports
 import com.mongodb.casbah.commons.MongoDBObject
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import io.github.morgaroth.utils.mongodb.salat.MongoDAOJodaSupport
+import io.github.morgaroth.utils.mongodb.salat.MongoDAO
 import io.morgaroth.media.library.ErrorOr
-import org.joda.time.LocalDateTime
 
+import java.time.LocalDateTime
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -18,8 +18,9 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
   def all: Future[Vector[Track]] = Future.successful(dao.find(MongoDBObject.empty).toVector)
 
   UUIDConversionHelpers.register()
+  JavaLocalDateTimeHelpers.register()
 
-  private val dao = new MongoDAOJodaSupport[Track](connectionCfg, "Tracks")
+  private val dao: MongoDAO[Track] = new MongoDAO[Track](connectionCfg, "Tracks")
   dao.collection.createIndex("id")
   dao.collection.createIndex(
     MongoDBObject("idCheck" -> 1),

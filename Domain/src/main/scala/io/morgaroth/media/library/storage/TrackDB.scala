@@ -1,11 +1,12 @@
 package io.morgaroth.media.library.storage
 
-import cats.implicits._
+import cats.syntax.option._
 import io.morgaroth.media.library.ErrorOr
-import org.joda.time.LocalDateTime
 
 import java.net.URLEncoder
+import java.time.LocalDateTime
 import java.util.UUID
+import scala.language.higherKinds
 
 case class TrackNotFound(desc: String) extends Exception(s"track not found $desc")
 
@@ -36,7 +37,7 @@ case class Track(
 
   def repr: String = {
     {
-      new StringBuilder() ++= title ++= ", " ++= artist ++=", " ++= createdAt.toLocalDate.toString() ++= ", " ++= url
+      new StringBuilder() ++= title ++= ", " ++= artist ++= ", " ++= createdAt.toLocalDate.toString ++= ", " ++= url
     }.mkString
   }
 }
@@ -91,22 +92,37 @@ object TrackId {
 trait TracksStorage[F[_]] {
 
   def getById(id: UUID): F[ErrorOr[Track]]
+
   def getBy(artist: String, title: String): F[ErrorOr[Track]]
+
   def save(document: Track): F[ErrorOr[Track]]
 
   def store(url: String): F[ErrorOr[Track]] = save(Track(url))
+
   def updateArtist(id: UUID, artist: String): F[ErrorOr[Track]]
+
   def updateTitle(id: UUID, title: String): F[ErrorOr[Track]]
+
   def updateAlbum(id: UUID, album: String): F[ErrorOr[Track]]
+
   def updateStartAt(id: UUID, data: Option[String]): F[ErrorOr[Track]]
+
   def updateEndAt(id: UUID, data: Option[String]): F[ErrorOr[Track]]
+
   def updateUrl(id: UUID, url: String): F[ErrorOr[Track]]
+
   def updateStatus(id: UUID, status: TrackStatus): F[ErrorOr[Track]]
+
   def updateFadeOutSeconds(id: UUID, newData: Option[Int]): F[ErrorOr[Track]]
+
   def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): F[ErrorOr[Track]]
+
   def updatePlaylists(id: UUID, newData: Set[String]): F[ErrorOr[Track]]
+
   def updateRawTitle(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+
   def updateRawDescription(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+
   def findAllPlaylists(): F[ErrorOr[Map[String, Vector[Track]]]]
 
   def search(
@@ -116,6 +132,7 @@ trait TracksStorage[F[_]] {
             ): F[ErrorOr[Vector[Track]]]
 
   def findAllReadyToFetch: F[Vector[Track]]
+
   def genericSearch(text: String, page: Int): F[ErrorOr[Vector[Track]]]
 }
 
