@@ -13,7 +13,7 @@ val circeVersion = "0.12.0"
 val deploy = taskKey[Unit]("Deploy deb.")
 val disabledMainClasses = Set("io.morgaroth.media.library.jobs.GUIApp")
 
-val domain = project.in(file("Domain"))
+val domain = project.in(file("domain"))
   .settings(commonSettings)
   .settings(
     name := "MusicLibrary",
