@@ -69,7 +69,7 @@ object UTCZonedDateTimeMongoCodec extends Codec[ZonedDateTime] {
 
 object MongoRepo {
   def fromArgs(): TracksDB = {
-    val c = ConfigFactory.load().getString("music-library.collection")
+    val c = ConfigFactory.load().getString("music-library.mongo.collection")
     c match {
       case "zbysio" => ZbysioTracks()
       case "christmas" => ChristmasTracks()
@@ -244,15 +244,15 @@ class TracksDB(val db: MongoCollection[Track], client: MongoClient)(implicit ex:
       .flatMapE(_ => getById(id))
   }
 
-  def updateRawTitle(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = {
+  def updateRawTitle(id: UUID, newData: String): Future[ErrorOr[Track]] = {
     getById(id)
-      .flatMapE(_ => updateFields(id, condSet("rawTitle", newData)))
+      .flatMapE(_ => updateFields(id, Updates.set("rawTitle", newData)))
       .flatMapE(_ => getById(id))
   }
 
-  def updateRawDescription(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = {
+  def updateRawDescription(id: UUID, newData: String): Future[ErrorOr[Track]] = {
     getById(id)
-      .flatMapE(_ => updateFields(id, condSet("rawDescription", newData)))
+      .flatMapE(_ => updateFields(id, Updates.set("rawDescription", newData)))
       .flatMapE(_ => getById(id))
   }
 

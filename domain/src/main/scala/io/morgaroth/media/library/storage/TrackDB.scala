@@ -120,9 +120,9 @@ trait TracksStorage[F[_]] {
 
   def updatePlaylists(id: UUID, newData: Set[String]): F[ErrorOr[Track]]
 
-  def updateRawTitle(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+  def updateRawTitle(id: UUID, newData: String): F[ErrorOr[Track]]
 
-  def updateRawDescription(id: UUID, newData: Option[String]): F[ErrorOr[Track]]
+  def updateRawDescription(id: UUID, newData: String): F[ErrorOr[Track]]
 
   def findAllPlaylists(): F[ErrorOr[Map[String, Vector[Track]]]]
 

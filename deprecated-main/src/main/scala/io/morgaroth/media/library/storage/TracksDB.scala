@@ -125,11 +125,11 @@ class TracksDB(val connectionCfg: Config, collection: String) extends TracksStor
     updateFields(id, "playlists" -> newData) >> getByIdPrv(id)
   }
 
-  def updateRawTitle(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful {
+  def updateRawTitle(id: UUID, newData: String): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "rawTitle" -> newData) >> getByIdPrv(id)
   }
 
-  def updateRawDescription(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful {
+  def updateRawDescription(id: UUID, newData: String): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "rawDescription" -> newData) >> getByIdPrv(id)
   }
 

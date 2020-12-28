@@ -16,7 +16,7 @@ package object gui {
 
     import scala.concurrent.duration._
 
-    def await(): A = Await.result(future, 10.seconds)
+    def await(): A = Await.result(future, 20.seconds)
 
     def await(tm: FiniteDuration): A = Await.result(future, tm)
   }

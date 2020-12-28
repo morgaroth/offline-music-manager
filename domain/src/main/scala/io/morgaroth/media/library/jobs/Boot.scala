@@ -80,8 +80,8 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
           id = versionId,
         )
         _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
-        _ <- if (definition.rawTitle.contains(ytMeta.title)) ().asRight else storage.updateRawTitle(definition._id, Some(ytMeta.title)).await()
-        _ <- if (definition.rawDescription.contains(ytMeta.description)) ().asRight else storage.updateRawDescription(definition._id, Some(ytMeta.title)).await()
+        _ <- if (definition.rawTitle == ytMeta.title) ().asRight else storage.updateRawTitle(definition._id, ytMeta.title).await()
+        _ <- if (definition.rawDescription == ytMeta.description) ().asRight else storage.updateRawDescription(definition._id, ytMeta.title).await()
         _ = logger.info("File {} ready", definition.info)
       } yield ()
 
@@ -102,6 +102,7 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
   }
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration) {
+    cfg.destinationDir.mkdirs()
     val sem = new Semaphore(20, true)
     val id = new AtomicInteger()
     val inc = new Semaphore(1, true)

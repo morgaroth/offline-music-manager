@@ -36,7 +36,7 @@ lazy val `deprecated-main` = project.in(file("deprecated-main"))
   .enablePlugins(JavaAppPackaging, DebianPlugin)
   .settings(
     maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
-    debianPackageDependencies += "java8-runtime-headless",
+    debianPackageDependencies += "java11-runtime-headless",
 
     libraryDependencies ++= Seq(
       "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
@@ -65,7 +65,7 @@ lazy val main = project.in(file("main"))
       "org.scalatest" %% "scalatest" % "3.+" % Test,
     ),
     maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
-    debianPackageDependencies += "java8-runtime-headless",
+    debianPackageDependencies += "java11-runtime-headless",
     sources in(Compile, doc) := Seq.empty,
     publishArtifact in(Compile, packageDoc) := false,
     discoveredMainClasses in Compile := {
