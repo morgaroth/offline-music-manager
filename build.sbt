@@ -1,7 +1,7 @@
 import sbt.Keys.{scalaVersion, sources}
 
 import scala.language.postfixOps
-
+import scala.sys.process.stringSeqToProcess
 
 val commonSettings = Seq(
   version := "0.1",
