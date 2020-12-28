@@ -6,7 +6,7 @@ import scala.sys.process._
 
 val commonSettings = Seq(
   version := "0.1",
-  scalaVersion := "2.12.11",
+  scalaVersion := "2.12.12",
 )
 
 val circeVersion = "0.12.0"
@@ -20,12 +20,11 @@ val domain = project.in(file("domain"))
     resolvers += Resolver.bintrayRepo("morgaroth", "maven"),
 
     libraryDependencies ++= Seq(
-      //  "org.mongodb.scala" %% "mongo-scala-driver" % "4.0.5",
       "com.github.scopt" %% "scopt" % "3.7.1",
       "ch.qos.logback" % "logback-classic" % "1.3.0-alpha5",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
       "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
-      "io.morgaroth" %% "gnome-scala" % "1.1.1-SNAPSHOT",
+      "io.morgaroth" %% "gnome-scala" % "1.1.1",
       "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
     ) ++ Seq(
       "io.circe" %% "circe-generic",
@@ -33,7 +32,7 @@ val domain = project.in(file("domain"))
     ).map(_ % circeVersion),
   )
 
-lazy val main = project.in(file("main"))
+lazy val `deprecated-main` = project.in(file("deprecated-main"))
   .dependsOn(domain)
   .enablePlugins(JavaAppPackaging, DebianPlugin)
   .settings(
