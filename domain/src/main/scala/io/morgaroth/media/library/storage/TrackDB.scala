@@ -21,7 +21,7 @@ case class Track(
                   volumeChange: Option[BigDecimal],
                   status: TrackStatus,
                   idCheck: Option[String],
-                  playlists: Set[String] = Set.empty,
+                  playlists: Option[Set[String]],
                   rawTitle: Option[String] = Some(""),
                   rawDescription: Option[String] = Some(""),
                   updatedAt: ZonedDateTime = ZonedDateTime.now(),
@@ -62,7 +62,7 @@ object Track {
              album: String,
              status: TrackStatus,
            ): Track = {
-    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Set.empty)
+    new Track(url, title, artist, album, none, none, none, none, status, TrackId(artist, title), Some(Set.empty))
   }
 
   def apply(
@@ -77,11 +77,11 @@ object Track {
              volumeChange: Option[BigDecimal],
              playlists: Set[String],
            ): Track = {
-    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists)
+    new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), Some(playlists))
   }
 
   def apply(url: String): Track = {
-    new Track(url, "", "", "", None, None, None, None, Draft, None, Set.empty)
+    new Track(url, "", "", "", None, None, None, None, Draft, None, Some(Set.empty))
   }
 }
 
@@ -95,8 +95,6 @@ object TrackId {
 trait TracksStorage[F[_]] {
 
   def getById(id: UUID): F[ErrorOr[Track]]
-
-  def getBy(artist: String, title: String): F[ErrorOr[Track]]
 
   def save(document: Track): F[ErrorOr[Track]]
 

@@ -6,6 +6,7 @@ import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.storage.{Draft, Track, TrackStatus, TracksStorage}
 
 import java.util.UUID
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future}
 import scala.util.Random
 
@@ -25,7 +26,7 @@ class GuiBackend(storage: TracksStorage[Future]) extends LazyLogging {
 
   def updateTitle(id: UUID, title: String): ErrorOr[Track] = storage.updateTitle(id, title).await()
 
-  def nextDraft: ErrorOr[Option[Track]] = storage.search(statuses = Some(Set(Draft))).await().map {
+  def nextDraft: ErrorOr[Option[Track]] = storage.search(statuses = Some(Set(Draft))).await(1.minute).map {
     allDrafts => if (allDrafts.isEmpty) none else allDrafts(Random.nextInt(allDrafts.size)).some
   }
 

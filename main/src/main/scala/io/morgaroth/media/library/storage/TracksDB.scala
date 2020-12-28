@@ -1,6 +1,8 @@
 package io.morgaroth.media.library.storage
 
-import cats.implicits._
+import cats.instances.either._
+import cats.syntax.either._
+import cats.syntax.flatMap._
 import com.mongodb.casbah.Imports
 import com.mongodb.casbah.commons.MongoDBObject
 import com.typesafe.config.Config
@@ -8,7 +10,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.github.morgaroth.utils.mongodb.salat.MongoDAO
 import io.morgaroth.media.library.ErrorOr
 
-import java.time.{LocalDateTime, ZonedDateTime}
+import java.time.ZonedDateTime
 import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -119,7 +121,7 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
 
   def findAllPlaylists(): Future[ErrorOr[Map[String, Vector[Track]]]] = Future.successful{
     Either.catchNonFatal(dao.find(MongoDBObject("playlists.0" -> MongoDBObject("$exists" -> true))).toVector)
-      .map(_.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
+      .map(_.flatMap(x => x.playlists.getOrElse(Set.empty).map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
   }
 
   def search(

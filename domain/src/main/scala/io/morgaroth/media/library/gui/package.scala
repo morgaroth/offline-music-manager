@@ -12,8 +12,13 @@ package object gui {
     }
   }
 
-  implicit class FutureAwaitable[A](future:Future[A]) {
+  implicit class FutureAwaitable[A](future: Future[A]) {
+
     import scala.concurrent.duration._
-    def await() = Await.result(future,10.seconds)
+
+    def await(): A = Await.result(future, 10.seconds)
+
+    def await(tm: FiniteDuration): A = Await.result(future, tm)
   }
+
 }
