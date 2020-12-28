@@ -2,10 +2,10 @@ package io.morgaroth.media.library.jobs
 
 import io.morgaroth.media.library.storage.MongoRepo
 
-object GUIApp {
+object DeprecatedMusicLibrary {
   def main(args: Array[String]): Unit = {
     val storage = MongoRepo.fromArgs()
-    val gui = new BaseGUIApp(storage)
-    gui.main()
+    val handler = new BaseMusicLibrary(storage)
+    handler.main(args)
   }
 }

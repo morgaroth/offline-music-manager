@@ -1,4 +1,4 @@
-import sbt.Keys.scalaVersion
+import sbt.Keys.{scalaVersion, sources}
 
 import scala.language.postfixOps
 
@@ -56,10 +56,26 @@ lazy val `deprecated-main` = project.in(file("deprecated-main"))
     },
   )
 
-lazy val main2 = project.in(file("mongov2"))
+lazy val main = project.in(file("main"))
   .dependsOn(domain)
+  .enablePlugins(JavaAppPackaging, DebianPlugin)
   .settings(
     libraryDependencies ++= Seq(
       "org.mongodb.scala" %% "mongo-scala-driver" % "4.0.5",
-    )
+      "org.scalatest" %% "scalatest" % "3.+" % Test,
+    ),
+    maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
+    debianPackageDependencies += "java8-runtime-headless",
+    sources in(Compile, doc) := Seq.empty,
+    publishArtifact in(Compile, packageDoc) := false,
+    discoveredMainClasses in Compile := {
+      (discoveredMainClasses in Compile).value.filterNot(disabledMainClasses)
+    },
+    deploy := {
+      (packageBin in Debian).toTask.value
+      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
+    },
   )
+
+val root = project.in(file("."))
+  .aggregate(main, `deprecated-main`, domain)
