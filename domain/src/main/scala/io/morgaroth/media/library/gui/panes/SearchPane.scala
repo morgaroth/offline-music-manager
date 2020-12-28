@@ -105,7 +105,7 @@ class SearchPane(
 
   def loadPage() = {
     val page = currentPage.getText.toInt
-    backend.search(input.getText, page).map(loadResults)
+    backend.search(input.getText, page).map(loadResults).left.foreach(_.printStackTrace())
   }
 
   val exec = Btn("Szukaj").onClick { _ =>

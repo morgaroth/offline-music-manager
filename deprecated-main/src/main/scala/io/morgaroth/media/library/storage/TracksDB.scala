@@ -5,7 +5,7 @@ import cats.syntax.either._
 import cats.syntax.flatMap._
 import com.mongodb.casbah.Imports
 import com.mongodb.casbah.commons.MongoDBObject
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import io.github.morgaroth.utils.mongodb.salat.MongoDAO
 import io.morgaroth.media.library.ErrorOr
@@ -15,14 +15,30 @@ import java.util.UUID
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
+object MongoRepo {
+  private def createDB(collection: String) = {
+    val cfg = ConfigFactory.load().getConfig("music-library.mongo")
+    new TracksDB(cfg, collection)
+  }
 
-class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with LazyLogging {
+  def AllTracks = createDB("Tracks")
+
+  def ChristmasTracks = createDB("ChristmasTracks")
+
+  def ZbysioTracks = createDB("ZbysioTracks")
+
+  def fromArgs() = {
+    createDB(ConfigFactory.load().getString("music-library.mongo.collection"))
+  }
+}
+
+class TracksDB(val connectionCfg: Config, collection: String) extends TracksStorage[Future] with LazyLogging {
   def all: Future[Vector[Track]] = Future.successful(dao.find(MongoDBObject.empty).toVector)
 
   UUIDConversionHelpers.register()
   JavaZonedDateTimeHelpers.register()
 
-  private val dao: MongoDAO[Track] = new MongoDAO[Track](connectionCfg, "Tracks")
+  private val dao: MongoDAO[Track] = new MongoDAO[Track](connectionCfg, collection)
   dao.collection.createIndex("id")
   dao.collection.createIndex(
     MongoDBObject("idCheck" -> 1),
@@ -32,8 +48,7 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
     )
   )
 
-
-  def getById(id: UUID): Future[ErrorOr[Track]] = 
+  def getById(id: UUID): Future[ErrorOr[Track]] =
     Future.successful(Either.catchNonFatal(dao.findOne(MongoDBObject("_id" -> id))).flatMap(
       _.map(_.asRight).getOrElse(TrackNotFound(s"by id $id").asLeft)
     ))
@@ -79,47 +94,47 @@ class TracksDB(val connectionCfg: Config) extends TracksStorage[Future] with Laz
     } yield res)
   }
 
-  def updateAlbum(id: UUID, album: String): Future[ErrorOr[Track]] = Future.successful{
+  def updateAlbum(id: UUID, album: String): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "album" -> album) >> getByIdPrv(id)
   }
 
-  def updateStartAt(id: UUID, data: Option[String]): Future[ErrorOr[Track]] = Future.successful{
+  def updateStartAt(id: UUID, data: Option[String]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "startAt" -> data) >> getByIdPrv(id)
   }
 
-  def updateEndAt(id: UUID, data: Option[String]): Future[ErrorOr[Track]] = Future.successful{
+  def updateEndAt(id: UUID, data: Option[String]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "endAt" -> data) >> getByIdPrv(id)
   }
 
-  def updateUrl(id: UUID, url: String): Future[ErrorOr[Track]] = Future.successful{
+  def updateUrl(id: UUID, url: String): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "url" -> url, "status" -> Draft.dbRepr) >> getByIdPrv(id)
   }
 
-  def updateStatus(id: UUID, status: TrackStatus): Future[ErrorOr[Track]] = Future.successful{
+  def updateStatus(id: UUID, status: TrackStatus): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "status" -> status.dbRepr) >> getByIdPrv(id)
   }
 
-  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): Future[ErrorOr[Track]] = Future.successful{
+  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "fadeOutSeconds" -> newData) >> getByIdPrv(id)
   }
 
-  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): Future[ErrorOr[Track]] =Future.successful{
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "volumeChange" -> newData.map(_.toDouble)) >> getByIdPrv(id)
   }
 
-  def updatePlaylists(id: UUID, newData: Set[String]): Future[ErrorOr[Track]] =Future.successful{
+  def updatePlaylists(id: UUID, newData: Set[String]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "playlists" -> newData) >> getByIdPrv(id)
   }
 
-  def updateRawTitle(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful{
+  def updateRawTitle(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "rawTitle" -> newData) >> getByIdPrv(id)
   }
 
-  def updateRawDescription(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful{
+  def updateRawDescription(id: UUID, newData: Option[String]): Future[ErrorOr[Track]] = Future.successful {
     updateFields(id, "rawDescription" -> newData) >> getByIdPrv(id)
   }
 
-  def findAllPlaylists(): Future[ErrorOr[Map[String, Vector[Track]]]] = Future.successful{
+  def findAllPlaylists(): Future[ErrorOr[Map[String, Vector[Track]]]] = Future.successful {
     Either.catchNonFatal(dao.find(MongoDBObject("playlists.0" -> MongoDBObject("$exists" -> true))).toVector)
       .map(_.flatMap(x => x.playlists.getOrElse(Set.empty).map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
   }

@@ -1,7 +1,6 @@
 import sbt.Keys.scalaVersion
 
 import scala.language.postfixOps
-import scala.sys.process._
 
 
 val commonSettings = Seq(
@@ -44,10 +43,10 @@ lazy val `deprecated-main` = project.in(file("deprecated-main"))
       "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
     ),
 
-//    deploy := {
-//      (packageBin in Debian).toTask.value
-//      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
-//    },
+    //    deploy := {
+    //      (packageBin in Debian).toTask.value
+    //      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
+    //    },
 
     sources in(Compile, doc) := Seq.empty,
     publishArtifact in(Compile, packageDoc) := false,

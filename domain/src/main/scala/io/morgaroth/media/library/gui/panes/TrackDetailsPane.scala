@@ -304,7 +304,8 @@ class TrackDetailsPane(
       println(maybeTrack.map(_.toString).getOrElse("brak szkiców"))
       loadControls()
     }.left.map { err =>
-      println(err)
+      println("loadDraft", err)
+      err.printStackTrace()
     }
   }
 
