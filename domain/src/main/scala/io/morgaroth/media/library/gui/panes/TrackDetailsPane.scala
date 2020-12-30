@@ -100,6 +100,7 @@ class TrackDetailsPane(
   private val startAtSave = Btn("Zapisz").disabled.withSizeRequest(saveBtnWidth, lineHeight)
   private val endAtSave = Btn("Zapisz").disabled.withSizeRequest(saveBtnWidth, lineHeight)
   private val fadeSave = Btn("Zapisz").disabled.withSizeRequest(saveBtnWidth, lineHeight)
+  private val playlistSave = Btn("Zapisz").disabled.withSizeRequest(saveBtnWidth, lineHeight)
   private val volumeSave = Btn("Zapisz").disabled.withSizeRequest(saveBtnWidth, lineHeight)
   private val deleteBtn = Btn("Usuń").disabled
   private val doneBtn = Btn("Zapisz jako gotowe").disabled
@@ -171,6 +172,23 @@ class TrackDetailsPane(
         case "" =>
           logger.info(s"removing ${track._id}/fadeOutSeconds")
           load(backend.updateFadeOutSeconds(track._id, None))
+        case invalidOne =>
+          logger.warn(s"invalid data value='$invalidOne'm raw='$rawInput'")
+      }
+    }
+  }
+
+  playlistSave.onClick { _ =>
+    trackUnderWork.foreach { track =>
+      val rawInput = Option(playlistsEdit.getText).map(_.trim)
+      rawInput.foreach {
+        case "" =>
+          logger.info(s"clearing ${track._id}/playlists")
+          load(backend.updatePlaylists(track._id, Set.empty))
+        case validValue if validValue.matches("""^([a-z]+\h*,\h*)*[a-z]+\h*$""") =>
+          val parsed = validValue.split(",").map(_.trim).filter(_.nonEmpty).sorted
+          logger.info(s"updating ${track._id}/playlists to '${parsed.mkString(", ")}'")
+          load(backend.updatePlaylists(track._id, parsed.toSet))
         case invalidOne =>
           logger.warn(s"invalid data value='$invalidOne'm raw='$rawInput'")
       }
@@ -255,8 +273,10 @@ class TrackDetailsPane(
     //    volumeEdit.enable(changeVolumeValue.isDefined)
     //    volumeSave.enable(changeVolumeValue.isDefined)
 
-    val playlistsValue = trackUnderWork.map(_.playlists.mkString(", "))
+    val playlistsValue = trackUnderWork.map(_.playlists.toList.sorted.mkString(", "))
     playlistsEdit.setText(playlistsValue.orEmpty)
+    playlistsEdit.enable(trackUnderWork.isDefined)
+    playlistSave.enable(trackUnderWork.isDefined)
 
     deleteBtn.enable(trackUnderWork.isDefined)
     doneBtn.enable(!trackUnderWork.map(_.status).forall(_ == Final))
@@ -316,7 +336,7 @@ class TrackDetailsPane(
   }
 
   add(VerticalLayout(
-    HorizontalLayout(storeUrl, storeBtn),
+    HorizontalLayout(deleteBtn, storeUrl, storeBtn),
     nextDraft,
     HorizontalLayout(L("Link").withSizeRequest(labelBtnWidth, lineHeight), urlEdit, updateUrlBtn, openBtn, searchYTBtn),
     HorizontalLayout(L("Twórca").withSizeRequest(labelBtnWidth, lineHeight), artistEdit, artistSave),
@@ -325,7 +345,7 @@ class TrackDetailsPane(
     HorizontalLayout(L("Opóżniony start").withSizeRequest(labelBtnWidth, lineHeight), /*startAtCheckBtn,*/ startAtEdit, startAtSave),
     HorizontalLayout(L("Wcześniejszy koniec").withSizeRequest(labelBtnWidth, lineHeight), /*endAtCheckBtn,*/ endAtEdit, endAtSave),
     HorizontalLayout(L("Wyciszanie").withSizeRequest(labelBtnWidth, lineHeight), /* fadeCheckBtn,*/ fadeEdit, fadeSave),
-    HorizontalLayout(L("Playlisty").withSizeRequest(labelBtnWidth, lineHeight), /* fadeCheckBtn,*/ playlistsEdit /*, fadeSave*/),
+    HorizontalLayout(L("Playlisty").withSizeRequest(labelBtnWidth, lineHeight), /* fadeCheckBtn,*/ playlistsEdit, playlistSave),
     //    HorizontalLayout(L("Głośność"), volumeCheckBtn, volumeEdit, volumeSave),
     HorizontalLayout(draftBtn, doneBtn),
   ))

@@ -6,8 +6,8 @@ import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.storage.{Draft, Track, TrackStatus, TracksStorage}
 
 import java.util.UUID
+import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, Future}
 import scala.util.Random
 
 class GuiBackend(storage: TracksStorage[Future]) extends LazyLogging {
@@ -37,6 +37,8 @@ class GuiBackend(storage: TracksStorage[Future]) extends LazyLogging {
   def updateUrl(id: UUID, url: String): ErrorOr[Track] = storage.updateUrl(id, url).await()
 
   def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track] = storage.updateFadeOutSeconds(id, newData).await()
+
+  def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track] = storage.updatePlaylists(id, newData).await()
 
   def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track] = storage.updateVolumeChange(id, newData).await()
 

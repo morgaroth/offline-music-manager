@@ -238,8 +238,13 @@ class TracksDB(val db: MongoCollection[Track], client: MongoClient)(implicit ex:
       .flatMapE(_ => getById(id))
   }
 
+  val hardcodedPlaylistsInsteadOfSmartManagement = Set(
+    "electronic", "christmas", "all", "zbysio",
+  )
+
   def updatePlaylists(id: UUID, newData: Set[String]): Future[ErrorOr[Track]] = {
     getById(id)
+      .semiFlatMapE(_ => Either.cond(newData.intersect(hardcodedPlaylistsInsteadOfSmartManagement).size == newData.size, (), UnknownPlaylist(newData.diff(hardcodedPlaylistsInsteadOfSmartManagement).mkString)))
       .flatMapE(_ => updateFields(id, Updates.set("playlists", newData)))
       .flatMapE(_ => getById(id))
   }
@@ -286,15 +291,15 @@ class TracksDB(val db: MongoCollection[Track], client: MongoClient)(implicit ex:
   }
 
   def genericSearch(text: String, page: Int): Future[ErrorOr[Vector[Track]]] = {
-    val q = Filters.or(
+    val filters = Vector(
       Filters.regex("url", s"(?i).*$text.*"),
       Filters.regex(Fields.artist, s"(?i).*$text.*"),
       Filters.regex(Fields.title, s"(?i).*$text.*"),
       Filters.regex(Fields.status, s"(?i).*$text.*"),
       Filters.regex("playlists", s"(?i).*$text.*"),
     )
-
-    db.find(q).skip((page - 1) * 10).limit(page).toFuture().map(_.toVector).toEither
+    val q = if (text.trim.nonEmpty) Filters.or(filters: _*) else BsonDocument()
+    db.find(q).skip((page - 1) * 10).limit(10).toFuture().map(_.toVector).toEither
   }
 
   def close(): Unit = client.close()

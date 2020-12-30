@@ -7,7 +7,10 @@ object MigrateTool extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
     val storage2 = MongoRepo.ZbysioTracks()
+    val storageAll = MongoRepo.AllTracks()
+
 
     storage2.close()
+    storageAll.close()
   }
 }

@@ -15,7 +15,7 @@ val disabledMainClasses = Set("io.morgaroth.media.library.jobs.GUIApp")
 val domain = project.in(file("domain"))
   .settings(commonSettings)
   .settings(
-    name := "MusicLibrary",
+    name := "MusicLibraryDomain",
     resolvers += Resolver.bintrayRepo("morgaroth", "maven"),
 
     libraryDependencies ++= Seq(
@@ -78,4 +78,7 @@ lazy val main = project.in(file("main"))
   )
 
 val root = project.in(file("."))
-  .aggregate(main, `deprecated-main`, domain)
+  .aggregate(main, /*`deprecated-main`,*/ domain)
+  .settings(
+    name := "MusicLibrary",
+  )

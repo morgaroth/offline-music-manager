@@ -1,14 +1,14 @@
 package io.morgaroth.media.library.gui.panes
 
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.gnome.scala.{Btn, Edit, HorizontalLayout, _}
 import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.storage.Track
 import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}
 import org.gnome.gtk
-import org.gnome.gtk.{CellRendererText, DataColumnReference, DataColumnString, ListStore, TreeView, Widget}
+import org.gnome.gtk._
+
+import java.util.UUID
 
 trait SearchPaneActionsListener {
   def onTrackRightClick(trackId: UUID): Unit
@@ -62,10 +62,18 @@ class SearchPane(
     override def onButtonReleaseEvent(widget: Widget, eventButton: EventButton) = {
       if (eventButton.getButton == MouseButton.RIGHT) {
         val path = view.getPathAtPos(eventButton.getX.toInt, eventButton.getY.toInt)
-        val row = view.getModel.getIter(path)
-        val id = view.getModel.getValue(row, idColumn)
-        actionsListener.onTrackRightClick(id)
-        true
+        try {
+          val row = view.getModel.getIter(path)
+          val id = view.getModel.getValue(row, idColumn)
+          actionsListener.onTrackRightClick(id)
+          true
+        } catch {
+          case e: IllegalArgumentException if e.getMessage == "path can't be null" =>
+            false
+          case another =>
+            logger.error("Got another error during checking where rmc was fired", another)
+            false
+        }
       } else false
     }
   })

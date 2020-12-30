@@ -10,6 +10,8 @@ import scala.language.higherKinds
 
 case class TrackNotFound(desc: String) extends Exception(s"track not found $desc")
 
+case class UnknownPlaylist(desc: String) extends Exception(s"playlists not found $desc")
+
 case class Track(
                   url: String,
                   title: String,
