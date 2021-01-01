@@ -22,6 +22,7 @@ val domain = project.in(file("domain"))
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.0",
       "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
       "io.morgaroth" %% "gnome-scala" % "1.1.1",
+      "dev.zio" %% "zio" % "1.0.3",
       "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
     ) ++ Seq(
       "io.circe" %% "circe-generic",
