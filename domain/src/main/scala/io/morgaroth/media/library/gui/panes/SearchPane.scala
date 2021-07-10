@@ -6,7 +6,6 @@ import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.storage.Track
 import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}
 import org.gnome.gtk
-import org.gnome.gtk._
 
 import java.util.UUID
 
@@ -23,18 +22,18 @@ class SearchPane(
 
   private val headerHeight = 35
 
-  val artistColumn = new DataColumnString()
-  val titleColumn = new DataColumnString()
-  val albumColumn = new DataColumnString()
-  val urlColumn = new DataColumnString()
-  val statusColumn = new DataColumnString()
-  val startAtColumn = new DataColumnString()
-  val endAtColumn = new DataColumnString()
-  val fadeColumn = new DataColumnString()
-  val volumeColumn = new DataColumnString()
-  val idColumn = new DataColumnReference[UUID]()
+  val artistColumn = new gtk.DataColumnString()
+  val titleColumn = new gtk.DataColumnString()
+  val albumColumn = new gtk.DataColumnString()
+  val urlColumn = new gtk.DataColumnString()
+  val statusColumn = new gtk.DataColumnString()
+  val startAtColumn = new gtk.DataColumnString()
+  val endAtColumn = new gtk.DataColumnString()
+  val fadeColumn = new gtk.DataColumnString()
+  val volumeColumn = new gtk.DataColumnString()
+  val idColumn = new gtk.DataColumnReference[UUID]()
 
-  val resultsStore = new ListStore(Array(artistColumn, titleColumn, albumColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
+  val resultsStore = new gtk.ListStore(Array(artistColumn, titleColumn, albumColumn, statusColumn, startAtColumn, endAtColumn, fadeColumn, volumeColumn, urlColumn, idColumn))
   val input = Edit()
 
   def loadResults(in: Vector[Track]) {
@@ -55,11 +54,11 @@ class SearchPane(
     }
   }
 
-  val view = new TreeView(resultsStore)
+  val view = new gtk.TreeView(resultsStore)
   view.setSizeRequest(width, height - headerHeight)
 
-  view.connect(new Widget.ButtonReleaseEvent {
-    override def onButtonReleaseEvent(widget: Widget, eventButton: EventButton) = {
+  view.connect(new gtk.Widget.ButtonReleaseEvent {
+    override def onButtonReleaseEvent(widget: gtk.Widget, eventButton: EventButton) = {
       if (eventButton.getButton == MouseButton.RIGHT) {
         val path = view.getPathAtPos(eventButton.getX.toInt, eventButton.getY.toInt)
         try {
@@ -78,10 +77,10 @@ class SearchPane(
     }
   })
 
-  def col(name: String, col: DataColumnString) {
+  def col(name: String, col: gtk.DataColumnString) {
     val column = view.appendColumn()
     column.setTitle(name)
-    val renderer = new CellRendererText(column)
+    val renderer = new gtk.CellRendererText(column)
     renderer.setText(col)
   }
 
@@ -121,8 +120,8 @@ class SearchPane(
     loadPage()
   }
 
-  input.connect(new Widget.KeyReleaseEvent {
-    override def onKeyReleaseEvent(widget: Widget, eventKey: EventKey) = {
+  input.connect(new gtk.Widget.KeyReleaseEvent {
+    override def onKeyReleaseEvent(widget: gtk.Widget, eventKey: EventKey) = {
       if (eventKey.getKeyval == Keyval.Return) {
         currentPage.setText("1")
         loadPage()

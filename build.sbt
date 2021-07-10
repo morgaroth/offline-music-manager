@@ -1,5 +1,3 @@
-import sbt.Keys.{scalaVersion, sources}
-
 import scala.language.postfixOps
 import scala.sys.process.stringSeqToProcess
 
@@ -48,11 +46,11 @@ lazy val `deprecated-main` = project.in(file("deprecated-main"))
     //      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
     //    },
 
-    sources in(Compile, doc) := Seq.empty,
-    publishArtifact in(Compile, packageDoc) := false,
+    Compile / doc / sources := Seq.empty,
+    Compile / packageDoc / publishArtifact := false,
 
-    discoveredMainClasses in Compile := {
-      (discoveredMainClasses in Compile).value.filterNot(disabledMainClasses)
+    Compile / discoveredMainClasses := {
+      (Compile / discoveredMainClasses).value.filterNot(disabledMainClasses)
     },
   )
 
@@ -66,14 +64,14 @@ lazy val main = project.in(file("main"))
     ),
     maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
     debianPackageDependencies += "java11-runtime-headless",
-    sources in(Compile, doc) := Seq.empty,
-    publishArtifact in(Compile, packageDoc) := false,
-    discoveredMainClasses in Compile := {
-      (discoveredMainClasses in Compile).value.filterNot(disabledMainClasses)
+    Compile / doc / sources := Seq.empty,
+    Compile / packageDoc / publishArtifact := false,
+    Compile / discoveredMainClasses := {
+      (Compile / discoveredMainClasses).value.filterNot(disabledMainClasses)
     },
     deploy := {
-      (packageBin in Debian).toTask.value
-      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
+      val outputFile = (Debian / packageBin).toTask.value
+      Seq("./deploy.sh", outputFile.getCanonicalPath).!
     },
   )
 
