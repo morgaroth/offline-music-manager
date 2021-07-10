@@ -16,7 +16,7 @@ val domain = project.in(file("domain"))
   .settings(commonSettings)
   .settings(
     name := "MusicLibraryDomain",
-    resolvers += Resolver.bintrayRepo("morgaroth", "maven"),
+    resolvers += "Artifactory" at "https://mateuszjajedev.jfrog.io/artifactory/maven/",
 
     libraryDependencies ++= Seq(
       "com.github.scopt" %% "scopt" % "3.7.1",
