@@ -6,7 +6,11 @@ import io.morgaroth.gnome.scala._
 import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.jobs.{MetaDataFetcher, YoutubeDLMeta}
+<<<<<<< HEAD
 import io.morgaroth.media.library.storage.{Deleted, Draft, Final, Track, ZioTracksStorageService}
+=======
+import io.morgaroth.media.library.storage.{Deleted, Draft, Final, Track, ZioTracksStorage}
+>>>>>>> 089eaaa060e41c01f0c388215e588ab5d8571808
 import org.gnome.gtk
 
 import scala.sys.process._
@@ -56,7 +60,11 @@ class TrackDetailsPaneZio(
   val rt = zio.Runtime.default
 
   private val updateUrlBtn = Btn("zapisz").onClick(_ => trackUnderWork.foreach { track =>
+<<<<<<< HEAD
     urlEdit.getText.trim.some.filter(_ != track.url).map(rt.unsafeRun(ZioTracksStorageService.updateUrl(track._id, _))).map(load)
+=======
+    urlEdit.getText.trim.some.filter(_ != track.url).map(rt.unsafeRun(ZioTracksStorage.updateUrl(track._id, _))).map(load)
+>>>>>>> 089eaaa060e41c01f0c388215e588ab5d8571808
   }).disabled.withSizeRequest(saveBtnWidth, lineHeight)
 
   private val openBtn = Btn("Otwórz!").onClick(_ => trackUnderWork.foreach {
