@@ -55,9 +55,31 @@ lazy val main = project.in(file("main"))
     },
   )
 
+lazy val osName = System.getProperty("os.name") match {
+  case n if n.startsWith("Linux") => "linux"
+  case n if n.startsWith("Mac") => "mac"
+  case n if n.startsWith("Windows") => "win"
+  case _ => throw new Exception("Unknown platform!")
+}
+val SecondImpl = project.in(file("second-impl"))
+  .dependsOn(main)
+  .settings(commonSettings)
+  .settings(
+    idePackagePrefix.withRank(Invisible) := Some("io.gitlab.mateuszjaje.offlinemusiclibrary"),
+    Compile / doc / sources := Seq.empty,
+    Compile / packageDoc / publishArtifact := false,
+    libraryDependencies ++= Seq("base", "controls", "fxml", "graphics", "media", "swing", "web").map(m =>
+      "org.openjfx" % s"javafx-$m" % "18" classifier osName
+    ),
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio" % "1.+",
+      "org.scalafx" %% "scalafx" % "18.+",
+    )
+  )
+
 val root = project.in(file("."))
   .settings(commonSettings)
-  .aggregate(main, domain)
+  .aggregate(main, domain, SecondImpl)
   .settings(
     name := "MusicLibrary",
   )
