@@ -2,7 +2,7 @@ package io.morgaroth.media.library.gui.panes
 
 import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
-import io.morgaroth.gnome.scala._
+import io.gitlab.mateuszjaje.gnome.scala._
 import io.morgaroth.media.library.ErrorOr
 import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.jobs.{MetaDataFetcher, YoutubeDLMeta}

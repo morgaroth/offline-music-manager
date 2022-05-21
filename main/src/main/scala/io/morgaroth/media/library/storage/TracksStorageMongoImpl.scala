@@ -161,7 +161,7 @@ class TracksStorageMongoImpl(col: MongoCollection[Track]) extends ZioTracksStora
   override def findAllPlaylists(): IO[Throwable, Map[String, Vector[Track]]] = {
     col.find(Filters.exists("playlists.0"))
       .collect().toTask
-      .map(_.toVector.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
+      .map(_.toVector.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).view.mapValues(_.map(_._2)).toMap)
   }
 
   override def search(artist: Option[String], title: Option[String], statuses: Option[Set[TrackStatus]], limit: Integer) = {

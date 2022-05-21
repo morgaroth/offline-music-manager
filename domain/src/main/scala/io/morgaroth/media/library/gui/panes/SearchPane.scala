@@ -1,7 +1,7 @@
 package io.morgaroth.media.library.gui.panes
 
 import com.typesafe.scalalogging.LazyLogging
-import io.morgaroth.gnome.scala.{Btn, Edit, HorizontalLayout, _}
+import io.gitlab.mateuszjaje.gnome.scala.{Btn, Edit, HorizontalLayout, _}
 import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.storage.Track
 import org.gnome.gdk.{EventButton, EventKey, Keyval, MouseButton}

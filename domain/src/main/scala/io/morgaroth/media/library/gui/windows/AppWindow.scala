@@ -4,7 +4,7 @@ import java.util.UUID
 
 import cats.syntax.either._
 import com.typesafe.scalalogging.LazyLogging
-import io.morgaroth.gnome.scala._
+import io.gitlab.mateuszjaje.gnome.scala._
 import io.morgaroth.media.library.gui.GuiBackend
 import io.morgaroth.media.library.gui.panes.{SearchPane, SearchPaneActionsListener, TrackDetailsPane}
 import org.gnome.gtk

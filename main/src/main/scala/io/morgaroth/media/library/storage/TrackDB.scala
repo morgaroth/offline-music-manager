@@ -264,7 +264,7 @@ class TracksDB(val db: MongoCollection[Track], client: MongoClient)(implicit ex:
   def findAllPlaylists(): Future[ErrorOr[Map[String, Vector[Track]]]] = {
     db.find(Filters.exists("playlists.0"))
       .toFuture()
-      .map(_.toVector.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).mapValues(_.map(_._2)))
+      .map(_.toVector.flatMap(x => x.playlists.map(_ -> x)).groupBy(_._1).view.mapValues(_.map(_._2)).toMap)
       .toEither
   }
 
