@@ -69,46 +69,46 @@ object ZioTracksStorageService {
 }
 
 trait ZioTracksStorageService {
-  def getById(id: UUID): IO[Throwable, Track]
+  def getById(id: UUID): Task[Track]
 
   def save(document: Track): Task[Unit]
 
-  def store(url: String): IO[Throwable, Track]
+  def store(url: String): Task[Track]
 
-  def updateArtist(id: UUID, artist: String): IO[Throwable, Track]
+  def updateArtist(id: UUID, artist: String): Task[Track]
 
-  def updateTitle(id: UUID, title: String): IO[Throwable, Track]
+  def updateTitle(id: UUID, title: String): Task[Track]
 
-  def updateAlbum(id: UUID, album: String): IO[Throwable, Track]
+  def updateAlbum(id: UUID, album: String): Task[Track]
 
-  def updateStartAt(id: UUID, data: Option[String]): IO[Throwable, Track]
+  def updateStartAt(id: UUID, data: Option[String]): Task[Track]
 
-  def updateEndAt(id: UUID, data: Option[String]): IO[Throwable, Track]
+  def updateEndAt(id: UUID, data: Option[String]): Task[Track]
 
-  def updateUrl(id: UUID, url: String): IO[Throwable, Track]
+  def updateUrl(id: UUID, url: String): Task[Track]
 
-  def updateStatus(id: UUID, status: TrackStatus): IO[Throwable, Track]
+  def updateStatus(id: UUID, status: TrackStatus): Task[Track]
 
-  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): IO[Throwable, Track]
+  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): Task[Track]
 
-  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): IO[Throwable, Track]
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): Task[Track]
 
-  def updatePlaylists(id: UUID, newData: Set[String]): IO[Throwable, Track]
+  def updatePlaylists(id: UUID, newData: Set[String]): Task[Track]
 
-  def updateRawTitle(id: UUID, newData: String): IO[Throwable, Track]
+  def updateRawTitle(id: UUID, newData: String): Task[Track]
 
-  def updateRawDescription(id: UUID, newData: String): IO[Throwable, Track]
+  def updateRawDescription(id: UUID, newData: String): Task[Track]
 
-  def findAllPlaylists(): IO[Throwable, Map[String, Vector[Track]]]
+  def findAllPlaylists(): Task[Map[String, Vector[Track]]]
 
   def search(
               artist: Option[String] = None, title: Option[String] = None,
               statuses: Option[Set[TrackStatus]] = None,
               limit: java.lang.Integer = null
-            ): IO[Throwable, Vector[Track]]
+            ): Task[Vector[Track]]
 
-  def findAllReadyToFetch: IO[Throwable, Vector[Track]]
+  def findAllReadyToFetch: Task[Vector[Track]]
 
-  def genericSearch(text: String, page: Int): IO[Throwable, Vector[Track]]
+  def genericSearch(text: String, page: Int): Task[Vector[Track]]
 }
 

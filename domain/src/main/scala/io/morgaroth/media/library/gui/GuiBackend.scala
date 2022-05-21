@@ -3,10 +3,9 @@ package io.morgaroth.media.library.gui
 import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.media.library.ErrorOr
-import io.morgaroth.media.library.storage.ZioTracksStorageService.ZioTracksStorage
 import io.morgaroth.media.library.storage._
 import zio.Runtime.default.unsafeRun
-import zio.{ULayer, ZIO}
+import zio.Task
 
 import java.util.UUID
 import scala.concurrent.Future
@@ -51,43 +50,43 @@ class FutureGuiBackend(storage: TracksStorage[Future]) extends LazyLogging with 
 
 }
 
-class ZioGuiBackend(layer: ULayer[ZioTracksStorage]) extends LazyLogging with GuiBackend {
+class ZioGuiBackend(layer: ZioTracksStorageService) extends LazyLogging with GuiBackend {
 
-  private def exec[A](task: ZIO[ZioTracksStorage, Throwable, A]): ErrorOr[A] = {
-    unsafeRun(task.provideLayer(layer).run.map(_.toEither))
+  private def exec[A](task: Task[A]): ErrorOr[A] = {
+    unsafeRun(task.run.map(_.toEither))
   }
 
-  def updateStatus(id: UUID, newStatus: TrackStatus): ErrorOr[Track] = exec(ZioTracksStorageService.updateStatus(id, newStatus))
+  def updateStatus(id: UUID, newStatus: TrackStatus): ErrorOr[Track] = exec(layer.updateStatus(id, newStatus))
 
-  def storeUrl(url: String): ErrorOr[Track] = exec(ZioTracksStorageService.storeUrl(url))
+  def storeUrl(url: String): ErrorOr[Track] = exec(layer.store(url))
 
-  def updateArtist(id: UUID, artist: String): ErrorOr[Track] = exec(ZioTracksStorageService.updateArtist(id, artist))
+  def updateArtist(id: UUID, artist: String): ErrorOr[Track] = exec(layer.updateArtist(id, artist))
 
-  def updateAlbum(id: UUID, album: String): ErrorOr[Track] = exec(ZioTracksStorageService.updateAlbum(id, album))
+  def updateAlbum(id: UUID, album: String): ErrorOr[Track] = exec(layer.updateAlbum(id, album))
 
-  def updateTitle(id: UUID, title: String): ErrorOr[Track] = exec(ZioTracksStorageService.updateTitle(id, title))
+  def updateTitle(id: UUID, title: String): ErrorOr[Track] = exec(layer.updateTitle(id, title))
 
   def nextDraft: ErrorOr[Option[Track]] = {
-    exec(ZioTracksStorageService.search(statuses = Some(Set(Draft))).map {
+    exec(layer.search(statuses = Some(Set(Draft))).map {
       allDrafts => if (allDrafts.isEmpty) none else allDrafts(Random.nextInt(allDrafts.size)).some
     })
   }
 
-  def updateStartAt(id: UUID, startAt: Option[String]): ErrorOr[Track] = exec(ZioTracksStorageService.updateStartAt(id, startAt))
+  def updateStartAt(id: UUID, startAt: Option[String]): ErrorOr[Track] = exec(layer.updateStartAt(id, startAt))
 
-  def updateEndAt(id: UUID, endAt: Option[String]): ErrorOr[Track] = exec(ZioTracksStorageService.updateEndAt(id, endAt))
+  def updateEndAt(id: UUID, endAt: Option[String]): ErrorOr[Track] = exec(layer.updateEndAt(id, endAt))
 
-  def updateUrl(id: UUID, url: String): ErrorOr[Track] = exec(ZioTracksStorageService.updateUrl(id, url))
+  def updateUrl(id: UUID, url: String): ErrorOr[Track] = exec(layer.updateUrl(id, url))
 
-  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track] = exec(ZioTracksStorageService.updateFadeOutSeconds(id, newData))
+  def updateFadeOutSeconds(id: UUID, newData: Option[Int]): ErrorOr[Track] = exec(layer.updateFadeOutSeconds(id, newData))
 
-  def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track] = exec(ZioTracksStorageService.updatePlaylists(id, newData))
+  def updatePlaylists(id: UUID, newData: Set[String]): ErrorOr[Track] = exec(layer.updatePlaylists(id, newData))
 
-  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track] = exec(ZioTracksStorageService.updateVolumeChange(id, newData))
+  def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): ErrorOr[Track] = exec(layer.updateVolumeChange(id, newData))
 
-  def search(text: String, page: Int): ErrorOr[Vector[Track]] = exec(ZioTracksStorageService.genericSearch(text, page))
+  def search(text: String, page: Int): ErrorOr[Vector[Track]] = exec(layer.genericSearch(text, page))
 
-  def getById(id: UUID): ErrorOr[Track] = exec(ZioTracksStorageService.getById(id))
+  def getById(id: UUID): ErrorOr[Track] = exec(layer.getById(id))
 
 }
 

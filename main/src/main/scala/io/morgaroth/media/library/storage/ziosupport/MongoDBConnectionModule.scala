@@ -5,6 +5,10 @@ import org.bson.codecs.configuration.CodecRegistry
 import org.mongodb.scala.{ConnectionString, MongoClient, MongoClientSettings, MongoDatabase, WriteConcern}
 import zio._
 
+case class MongoConnectionUrl(uri: String)
+
+case class MongoConnectionCollection(collectionName: String)
+
 case class MongoConnectionConfig(uri: String, collectionName: String)
 
 case class ConnectionInfo(database: MongoDatabase, config: MongoConnectionConfig)

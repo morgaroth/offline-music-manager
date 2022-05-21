@@ -1,15 +1,16 @@
 package io.morgaroth.media.library.storage
 
+import com.typesafe.config.ConfigFactory
 import io.morgaroth.media.library.storage.ZioTracksStorageService.ZioTracksStorage
 import io.morgaroth.media.library.storage.ziosupport.mongoziointerop.ToTask
-import io.morgaroth.media.library.storage.ziosupport.{ConnectionInfo, MongoConnectionConfig, MongoDBConnectionModule}
+import io.morgaroth.media.library.storage.ziosupport.{ConnectionInfo, MongoConnectionCollection, MongoConnectionConfig, MongoConnectionUrl, MongoDBConnectionModule}
 import org.bson.codecs.configuration.CodecRegistries
 import org.mongodb.scala.bson.BsonDocument
 import org.mongodb.scala.bson.codecs.Macros
 import org.mongodb.scala.bson.conversions.Bson
 import org.mongodb.scala.model.{Filters, FindOneAndUpdateOptions, IndexOptions, Updates}
 import org.mongodb.scala.{Document, MongoClient, MongoCollection}
-import zio.{Has, IO, Task, ZIO, ZLayer}
+import zio.{Has, IO, RLayer, Task, URLayer, ZIO, ZLayer}
 
 import java.time.ZonedDateTime
 import java.util.UUID
@@ -40,12 +41,14 @@ object TracksStorageService {
   val tracksStorage: ZLayer[Has[MongoConnectionConfig], Throwable, ZioTracksStorage] =
     MongoDBConnectionModule.forCodec(tracksStorageCodecs) >>> live
 
-  //  def getByBrokerIds(strings: Iterable[String]): RIO[PositionsStorage, Vector[PositionDbEntry]] =
-  //    ZIO.accessM[PositionsStorage](_.get.getByBrokerIds(strings))
-  //
-  //  def store(entry: PositionDbEntry): RIO[PositionsStorage, Unit] =
-  //    ZIO.accessM[PositionsStorage](_.get.store(entry))
 
+  val mong = MongoConnectionConfig(ConfigFactory.load().getString("music-library.mongo.uri"), "Tracks")
+
+  private def LdefinedCollection(colName:String) = ZLayer.fromService((x:MongoConnectionUrl) => MongoConnectionConfig(x.uri,colName))
+
+  val AllTracks: RLayer[Has[MongoConnectionUrl], ZioTracksStorage] = LdefinedCollection("Tracks") >>> tracksStorage
+  val ChristmasTracks = LdefinedCollection("ChristmasTracks") >>> tracksStorage
+  val ZbysioTracks = LdefinedCollection("ZbysioTracks") >>> tracksStorage
 }
 
 class TracksStorageMongoImpl(col: MongoCollection[Track]) extends ZioTracksStorageService {
