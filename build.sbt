@@ -63,6 +63,7 @@ lazy val main = project.in(file("main"))
   .enablePlugins(JavaAppPackaging, DebianPlugin)
   .settings(
     libraryDependencies ++= Seq(
+      "io.github.kitlangton" %% "zio-magic" % "0.3.12",
       "org.mongodb.scala" %% "mongo-scala-driver" % "4.0.5",
       "org.scalatest" %% "scalatest" % "3.+" % Test,
       "com.typesafe" % "config" % "1.4.2",

@@ -3,9 +3,10 @@ package io.morgaroth.media.library.gui
 import cats.syntax.option._
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.media.library.ErrorOr
+import io.morgaroth.media.library.storage.ZioTracksStorageService.ZioTracksStorage
 import io.morgaroth.media.library.storage._
 import zio.Runtime.default.unsafeRun
-import zio.Task
+import zio.{Has, Task, ZLayer}
 
 import java.util.UUID
 import scala.concurrent.Future
@@ -87,6 +88,11 @@ class ZioGuiBackend(layer: ZioTracksStorageService) extends LazyLogging with Gui
   def search(text: String, page: Int): ErrorOr[Vector[Track]] = exec(layer.genericSearch(text, page))
 
   def getById(id: UUID): ErrorOr[Track] = exec(layer.getById(id))
+
+}
+
+object ZioGuiBackend {
+  val live: ZLayer[ZioTracksStorage, Nothing, Has[ZioGuiBackend]] = ZLayer.fromService(new ZioGuiBackend(_))
 
 }
 
