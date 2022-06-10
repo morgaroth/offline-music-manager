@@ -64,7 +64,7 @@ object Args {
       .text("debug mode")
   }
 
-  def apply(args: Array[String]): Option[Configuration] = {
+  def apply(args: Seq[String]): Option[Configuration] = {
     parser.parse(args, Configuration())
   }
 }

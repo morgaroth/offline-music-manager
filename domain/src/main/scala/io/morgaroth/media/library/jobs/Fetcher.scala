@@ -42,7 +42,7 @@ object MetaDataFetcher {
 
 }
 
-class Boot(storage: TracksStorage[Future]) extends LazyLogging {
+class Fetcher(storage: TracksStorage[Future]) extends LazyLogging {
 
   val algorithmVersion = "4"
 
@@ -90,7 +90,7 @@ class Boot(storage: TracksStorage[Future]) extends LazyLogging {
           logger.warn(s"The track needs to be updated ${t.getMessage}")
           t
         case t: Throwable =>
-          logger.error(s"Error $t during handling ${definition.url}, going forward...")
+          logger.error(s"Error $t during handling ${definition.url}, going forward... [2]")
           t
         //        }.valueOr(throw _)
       }

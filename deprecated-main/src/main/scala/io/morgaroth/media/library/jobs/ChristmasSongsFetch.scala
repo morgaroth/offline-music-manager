@@ -9,6 +9,6 @@ object ChristmasSongsFetch {
     val file = new File(new File(new File(System.getProperty("user.home")), "music-library"), "christmas")
 
     val storage = MongoRepo.ChristmasTracks
-    new Boot(storage).main(Array("--destination-dir", file.getAbsolutePath))
+    new Fetcher(storage).main(Array("--destination-dir", file.getAbsolutePath))
   }
 }

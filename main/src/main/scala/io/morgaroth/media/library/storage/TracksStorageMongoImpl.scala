@@ -44,7 +44,7 @@ object TracksStorageService {
 
   val mong = MongoConnectionConfig(ConfigFactory.load().getString("music-library.mongo.uri"), "Tracks")
 
-  private def LdefinedCollection(colName:String) = ZLayer.fromService((x:MongoConnectionUrl) => MongoConnectionConfig(x.uri,colName))
+  private def LdefinedCollection(colName: String) = ZLayer.fromService((x: MongoConnectionUrl) => MongoConnectionConfig(x.uri, colName))
 
   val AllTracks: RLayer[Has[MongoConnectionUrl], ZioTracksStorage] = LdefinedCollection("Tracks") >>> tracksStorage
   val ChristmasTracks = LdefinedCollection("ChristmasTracks") >>> tracksStorage
@@ -74,7 +74,8 @@ class TracksStorageMongoImpl(col: MongoCollection[Track]) extends ZioTracksStora
   }
 
   private def condSet[A](name: String, value: Option[A]) = {
-    value.fold(Updates.unset(name))(Updates.set(name, _))
+    //    value.fold(Updates.unset(name))(Updates.set(name, _))
+    value.fold(Updates.set(name, null))(Updates.set(name, _))
   }
 
   override def getById(id: UUID) =
