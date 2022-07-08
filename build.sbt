@@ -31,32 +31,6 @@ val domain = project.in(file("domain"))
     ).map(_ % circeVersion),
   )
 
-lazy val `deprecated-main` = project.in(file("deprecated-main"))
-  .dependsOn(domain)
-  .settings(commonSettings)
-  .enablePlugins(JavaAppPackaging, DebianPlugin)
-  .settings(
-    maintainer := "Mateusz Jaje <mateuszjaje@gmail.com",
-    debianPackageDependencies += "java11-runtime-headless",
-
-    libraryDependencies ++= Seq(
-      //      "io.github.morgaroth" %% "utils-mongodb" % "3.0.1",
-      //      "io.morgaroth" %% "mongodb-testing-docker" % "1.0.1" % Test,
-    ),
-
-    //    deploy := {
-    //      (packageBin in Debian).toTask.value
-    //      Seq("./deploy.sh", s"${target.value.getAbsolutePath}/${name.value}_${version.value}_all.deb").!
-    //    },
-
-    Compile / doc / sources := Seq.empty,
-    Compile / packageDoc / publishArtifact := false,
-
-    Compile / discoveredMainClasses := {
-      (Compile / discoveredMainClasses).value.filterNot(disabledMainClasses)
-    },
-  )
-
 lazy val main = project.in(file("main"))
   .dependsOn(domain)
   .settings(commonSettings)
@@ -83,7 +57,7 @@ lazy val main = project.in(file("main"))
 
 val root = project.in(file("."))
   .settings(commonSettings)
-  .aggregate(main, /*`deprecated-main`,*/ domain)
+  .aggregate(main, domain)
   .settings(
     name := "MusicLibrary",
   )

@@ -1,19 +1,16 @@
 package io.morgaroth.media.library.storage
 
 import cats.syntax.either._
-import com.mongodb.ConnectionString
-import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.media.library.ErrorOr
-import org.bson.codecs.configuration.{CodecConfigurationException, CodecProvider, CodecRegistries, CodecRegistry}
+import org.bson.codecs.configuration.{CodecConfigurationException, CodecProvider, CodecRegistry}
 import org.bson.codecs.{Codec, DecoderContext, EncoderContext}
-import org.bson.{BsonReader, BsonType, BsonWriter, UuidRepresentation}
+import org.bson.{BsonReader, BsonType, BsonWriter}
 import org.mongodb.scala.bson.BsonDocument
-import org.mongodb.scala.bson.codecs.Macros
 import org.mongodb.scala.bson.conversions.Bson
 import org.mongodb.scala.model.Filters.equal
 import org.mongodb.scala.model.{Filters, FindOneAndUpdateOptions, IndexOptions, Updates}
-import org.mongodb.scala.{MongoClient, MongoClientSettings, MongoCollection}
+import org.mongodb.scala.{MongoClient, MongoCollection}
 
 import java.time.{Instant, ZoneOffset, ZonedDateTime}
 import java.util.UUID
@@ -65,57 +62,6 @@ object UTCZonedDateTimeMongoCodec extends Codec[ZonedDateTime] {
   }
 
   override def getEncoderClass: Class[ZonedDateTime] = classOf[ZonedDateTime]
-}
-
-object MongoRepo {
-  def fromArgs(): TracksDB = {
-    val c = ConfigFactory.load().getString("music-library.mongo.collection")
-    c match {
-      case "zbysio" => ZbysioTracks()
-      case "christmas" => ChristmasTracks()
-      case "all" | "" => AllTracks()
-      case other => createDb(other)
-    }
-  }
-
-  val customCodecs = CodecRegistries.fromCodecs(UTCZonedDateTimeMongoCodec, MongoCodec.StringUUIDCodec, MongoCodec.TrackStatusCodec)
-  val customCodecProviders = CodecRegistries.fromProviders(TrackStatusCodecProvider)
-  val initialCodecs = CodecRegistries.fromRegistries(customCodecs, customCodecProviders, MongoClient.DEFAULT_CODEC_REGISTRY)
-
-  private val TrackCodec = Macros.createCodecProviderIgnoreNone[Track]
-
-  private def createCollection[K, V: ClassTag](uri: String, collection: String, codecs: CodecProvider) = {
-    val finalCodec = CodecRegistries.fromRegistries(
-      initialCodecs,
-      CodecRegistries.fromProviders(codecs),
-    )
-
-    val mongoUri = new ConnectionString(uri)
-    val clientSettings = MongoClientSettings.builder().uuidRepresentation(UuidRepresentation.JAVA_LEGACY).applyConnectionString(mongoUri).codecRegistry(finalCodec).build()
-    val mongoClient = MongoClient(clientSettings)
-    val database = mongoClient
-      .getDatabase(mongoUri.getDatabase)
-
-    database.getCollection[V](collection) -> mongoClient
-  }
-
-  private def createDB(uri: String, collection: String): TracksDB = {
-    import scala.concurrent.ExecutionContext.Implicits.global
-    val tuple = createCollection[UUID, Track](uri, collection, TrackCodec)
-    val db = new TracksDB(tuple._1, tuple._2)
-    db.initialize()
-    db
-  }
-
-  def createDb(collection: String, uri: String = ConfigFactory.load().getString("music-library.mongo.uri")) = {
-    createDB(uri, collection)
-  }
-
-  def AllTracks() = createDb("Tracks")
-
-  def ChristmasTracks() = createDb("ChristmasTracks")
-
-  def ZbysioTracks() = createDb("ZbysioTracks")
 }
 
 object Fields {

@@ -3,7 +3,6 @@ package io.morgaroth.media.library.storage
 import zio._
 
 import java.util.UUID
-import scala.language.higherKinds
 
 object ZioTracksStorageService {
   type TService = Has[ZioTracksStorageService]
