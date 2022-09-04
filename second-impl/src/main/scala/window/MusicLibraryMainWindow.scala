@@ -14,7 +14,6 @@ object MusicLibraryMainWindow extends JFXApp3 {
   private val windowWidth = 1000
   private val windowHeight = 800
 
-    val storage = MongoRepo.AllTracks()
 
   override def start(): Unit = {
     val manaLabel = new Label("mana:")

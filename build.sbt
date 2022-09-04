@@ -21,7 +21,7 @@ val domain = project.in(file("domain"))
       "com.github.scopt" %% "scopt" % "3.7.1",
       "ch.qos.logback" % "logback-classic" % "1.3.0-alpha5",
       "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
-      "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
+//      "java" % "java-gnome" % "4.1.3" from "file:///usr/share/java/gtk.jar",
       "io.gitlab.mateuszjaje" %% "gnome-scala" % "1.2.0",
       "dev.zio" %% "zio" % "1.0.3",
       "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
