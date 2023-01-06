@@ -50,6 +50,14 @@ class TrackDetailsPane(
   }
 
   private val lineHeight = 40
+  import scalafx.scene.control
+
+  def fxEntry(idString: String) = new control.TextField {
+    id = idString
+    minWidth = saveBtnWidth
+  }
+
+
   private val urlEdit = Edit().disabled.withSizeRequest(inputWidth, lineHeight)
   private val titleEdit = Edit().disabled.withSizeRequest(inputWidth, lineHeight)
   private val artistEdit = Edit().disabled.withSizeRequest(inputWidth, lineHeight)
