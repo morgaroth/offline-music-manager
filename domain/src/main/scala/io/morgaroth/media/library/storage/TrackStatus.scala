@@ -1,17 +1,10 @@
 package io.morgaroth.media.library.storage
 
-sealed trait TrackStatus extends Product with Serializable {
-  lazy val dbRepr: String = getClass.getSimpleName.toLowerCase.stripSuffix("$")
-}
+enum TrackStatus:
+  case Draft, Final, Deleted
 
-object TrackStatus {
-  val all = Vector(Draft, Final, Deleted)
-  val byDbRepr = all.map(x => x.dbRepr -> x).toMap
-  val valuesClasses = all.map(_.getClass)
-}
+  lazy val dbRepr: String = this.toString.toLowerCase
 
-case object Draft extends TrackStatus
-
-case object Final extends TrackStatus
-
-case object Deleted extends TrackStatus
+object TrackStatus:
+  val all: Vector[TrackStatus] = Vector(TrackStatus.Draft, TrackStatus.Final, TrackStatus.Deleted)
+  val byDbRepr: Map[String, TrackStatus] = all.map(x => x.dbRepr -> x).toMap
