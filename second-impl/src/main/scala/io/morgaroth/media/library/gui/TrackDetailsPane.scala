@@ -1,15 +1,19 @@
 package io.morgaroth.media.library.gui
 
-import io.morgaroth.media.library.storage.{Track, TrackStatus}
+import io.morgaroth.media.library.Configuration
+import io.morgaroth.media.library.jobs.ZIOFetcher
+import io.morgaroth.media.library.storage.{Track, TrackStatus, ZioTracksStorageService}
+import javafx.application.Platform
 import scalafx.Includes.*
 import scalafx.geometry.Insets
-import scalafx.scene.control.{Button, Label, TextField}
+import scalafx.scene.control.{Button, Label, ProgressBar, TextField}
 import scalafx.scene.layout.{GridPane, HBox, Priority, VBox}
 import zio.*
 
+import java.io.File
 import java.util.UUID
 
-class TrackDetailsPane(backend: GuiBackend, runtime: Runtime[Any]) extends VBox:
+class TrackDetailsPane(backend: GuiBackend, storage: ZioTracksStorageService, runtime: Runtime[Any]) extends VBox:
   spacing = 8
   padding = Insets(10)
 
@@ -70,31 +74,67 @@ class TrackDetailsPane(backend: GuiBackend, runtime: Runtime[Any]) extends VBox:
 
   private val nextDraftBtn = new Button("Następny szkic"):
     onAction = _ =>
-      Unsafe.unsafe { implicit u =>
-        runtime.unsafe.fork(
-          FxBridge.runOnFx(backend.nextDraft):
-            case Some(track) => load(track)
-            case None => clearControls()
-        )
-      }
+      FxBridge.run(runtime)(backend.nextDraft)(
+        {
+          case Some(track) => load(track)
+          case None => clearControls()
+        },
+        err => println(s"[UI] nextDraft error: ${err.getMessage}")
+      )
 
   private val storeBtn = new Button("Dodaj"):
     onAction = _ =>
       val url = storeUrlField.text.value.trim
       if url.nonEmpty then
-        Unsafe.unsafe { implicit u =>
-          runtime.unsafe.fork(
-            FxBridge.runOnFx(backend.storeUrl(url))(track =>
-              storeUrlField.text = ""
-              load(track)
-            )
-          )
-        }
+        FxBridge.run(runtime)(backend.storeUrl(url))(
+          track =>
+            storeUrlField.text = ""
+            load(track)
+          ,
+          err => println(s"[UI] storeUrl error: ${err.getMessage}")
+        )
 
   private val openInBrowserBtn = new Button("Otwórz"):
     disable = true
     onAction = _ => trackUnderWork.foreach: track =>
       java.lang.Runtime.getRuntime.exec(Array("xdg-open", track.url))
+
+  private val pullProgress = new ProgressBar:
+    prefWidth = 120
+    progress = -1.0
+    visible = false
+
+  private val pullStatusLabel = new Label("")
+
+  private val pullBtn: Button = new Button("Pobierz"):
+    disable = true
+    onAction = _ => trackUnderWork.foreach: track =>
+      if track.isReadyToFetch then
+        pullBtn.disable = true
+        pullProgress.visible = true
+        pullStatusLabel.text = "Pobieram..."
+        val cfg = Configuration(
+          destinationDir = File(s"${java.lang.System.getProperty("user.home")}/music-library/all-music"),
+          cacheDir = File(s"${java.lang.System.getProperty("user.home")}/music-library/cache"),
+          downloaderExec = "yt-dlp",
+        )
+        val fetcher = ZIOFetcher(storage)
+        given Track = track
+        val effect = ZIO.blocking(fetcher.handleUrl(cfg)).as(())
+        FxBridge.run(runtime)(effect)(
+          _ =>
+            pullProgress.visible = false
+            pullStatusLabel.text = "Gotowe!"
+            pullBtn.disable = false
+          ,
+          err =>
+            pullProgress.visible = false
+            pullStatusLabel.text = s"Błąd: ${err.getMessage.take(50)}"
+            pullBtn.disable = false
+            println(s"[Pull] error: ${err.getMessage}")
+        )
+      else
+        pullStatusLabel.text = "Track nie gotowy (potrzebny tytuł, artysta, status=final)"
 
   // Layout
   private val grid = new GridPane:
@@ -119,7 +159,7 @@ class TrackDetailsPane(backend: GuiBackend, runtime: Runtime[Any]) extends VBox:
 
   private val actionsBar = new HBox:
     spacing = 8
-    children = Seq(deleteBtn, draftBtn, doneBtn, openInBrowserBtn)
+    children = Seq(deleteBtn, draftBtn, doneBtn, openInBrowserBtn, pullBtn, pullProgress, pullStatusLabel)
 
   private val addBar = new HBox:
     spacing = 8
@@ -154,7 +194,7 @@ class TrackDetailsPane(backend: GuiBackend, runtime: Runtime[Any]) extends VBox:
   private def setControlsEnabled(enabled: Boolean): Unit =
     val disabled = !enabled
     Seq(urlField, titleField, artistField, albumField, startAtField, endAtField, fadeField, playlistsField).foreach(_.disable = disabled)
-    Seq(urlSave, titleSave, artistSave, albumSave, startAtSave, endAtSave, fadeSave, playlistsSave, deleteBtn, doneBtn, draftBtn, openInBrowserBtn).foreach(_.disable = disabled)
+    Seq(urlSave, titleSave, artistSave, albumSave, startAtSave, endAtSave, fadeSave, playlistsSave, deleteBtn, doneBtn, draftBtn, openInBrowserBtn, pullBtn).foreach(_.disable = disabled)
 
   private def saveField(field: TextField, getter: Track => String, updater: (UUID, String) => Task[Track]): Unit =
     trackUnderWork.foreach: track =>
@@ -163,11 +203,7 @@ class TrackDetailsPane(backend: GuiBackend, runtime: Runtime[Any]) extends VBox:
         runEffect(updater(track._id, newValue))
 
   private def runEffect(effect: Task[Track]): Unit =
-    Unsafe.unsafe { implicit u =>
-      runtime.unsafe.fork(
-        FxBridge.runOnFx(effect)(track => load(track))
-      )
-    }
+    FxBridge.run(runtime)(effect)(track => load(track))
 
   private val nameStripped = """^[\s\-/]*(.+?)[\s\-/]*$""".r
 

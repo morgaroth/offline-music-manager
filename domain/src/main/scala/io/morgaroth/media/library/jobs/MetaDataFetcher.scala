@@ -14,7 +14,7 @@ object MetaDataFetcher:
 
   def getYTMetadata(downloaderExec: String, url: String, format: Option[String]): Either[Throwable, YoutubeDLMeta] =
     Try {
-      (Seq(downloaderExec, "--print-json", "-s", url) ++ format.toSeq.flatMap(x => Seq("-o", x))).!!
+      (Seq(downloaderExec, "--cookies-from-browser", "chrome", "--print-json", "-s", url) ++ format.toSeq.flatMap(x => Seq("-o", x))).!!
     }.toEither.flatMap { json =>
       decode[YoutubeDLMeta](json).left.map:
         case c: DecodingFailure => c.withMessage(json)

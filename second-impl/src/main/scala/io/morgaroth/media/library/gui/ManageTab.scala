@@ -1,21 +1,25 @@
 package io.morgaroth.media.library.gui
 
-import io.morgaroth.media.library.storage.Track
+import io.morgaroth.media.library.storage.{Track, ZioTracksStorageService}
 import javafx.collections.{FXCollections, ObservableList}
 import scalafx.Includes.*
 import scalafx.beans.property.StringProperty
 import scalafx.geometry.Insets
-import scalafx.scene.control.{Button, Label, TableColumn, TableView, TextField}
+import scalafx.scene.control.*
 import scalafx.scene.input.{KeyCode, KeyEvent, MouseEvent}
 import scalafx.scene.layout.{HBox, Priority, VBox}
-import zio.*
+import zio.Runtime
 
-import java.util.UUID
+/** Manage tab: track details editing pane on top, search/selection table on bottom.
+  * Includes a "Pobierz" (pull/download) button to fetch a single song.
+  */
+class ManageTab(backend: GuiBackend, storage: ZioTracksStorageService, runtime: Runtime[Any]) extends SplitPane:
+  orientation = scalafx.geometry.Orientation.Vertical
+  dividerPositions = 0.5
 
-class SearchPane(backend: GuiBackend, runtime: Runtime[Any], onTrackSelected: Track => Unit) extends VBox:
-  spacing = 8
-  padding = Insets(10)
+  private val trackDetailsPane = TrackDetailsPane(backend, storage, runtime)
 
+  // --- Search panel at the bottom ---
   private val searchField = new TextField:
     promptText = "Szukaj..."
     hgrow = Priority.Always
@@ -26,13 +30,10 @@ class SearchPane(backend: GuiBackend, runtime: Runtime[Any], onTrackSelected: Tr
   private val pageLabel = new Label("1")
 
   private var currentPage = 1
-
   private val tracks: ObservableList[Track] = FXCollections.observableArrayList[Track]()
 
   private val tableView = new TableView[Track](tracks):
-    prefHeight = 300
     vgrow = Priority.Always
-
     columns ++= Seq(
       new TableColumn[Track, String]:
         text = "Twórca"
@@ -54,27 +55,12 @@ class SearchPane(backend: GuiBackend, runtime: Runtime[Any], onTrackSelected: Tr
         prefWidth = 70
         cellValueFactory = row => StringProperty(row.value.status.dbRepr)
       ,
-      new TableColumn[Track, String]:
-        text = "Start"
-        prefWidth = 60
-        cellValueFactory = row => StringProperty(row.value.startAt.getOrElse(""))
-      ,
-      new TableColumn[Track, String]:
-        text = "Koniec"
-        prefWidth = 60
-        cellValueFactory = row => StringProperty(row.value.endAt.getOrElse(""))
-      ,
-      new TableColumn[Track, String]:
-        text = "Fade"
-        prefWidth = 50
-        cellValueFactory = row => StringProperty(row.value.fadeOutSeconds.map(_.toString).getOrElse(""))
-      ,
     )
 
   tableView.onMouseClicked = (event: MouseEvent) =>
     if event.clickCount == 2 then
       val selected = tableView.selectionModel.value.getSelectedItem
-      if selected != null then onTrackSelected(selected)
+      if selected != null then trackDetailsPane.load(selected)
 
   searchField.onKeyPressed = (event: KeyEvent) =>
     if event.code == KeyCode.Enter then doSearch()
@@ -93,9 +79,16 @@ class SearchPane(backend: GuiBackend, runtime: Runtime[Any], onTrackSelected: Tr
 
   private val searchBar = new HBox:
     spacing = 5
+    padding = Insets(5)
     children = Seq(searchField, searchButton, prevButton, pageLabel, nextButton)
 
-  children = Seq(searchBar, tableView)
+  private val searchPanel = new VBox:
+    spacing = 0
+    padding = Insets(5)
+    children = Seq(searchBar, tableView)
+    VBox.setVgrow(tableView, Priority.Always)
+
+  items.addAll(trackDetailsPane, searchPanel)
 
   private def doSearch(): Unit =
     currentPage = 1
@@ -104,11 +97,16 @@ class SearchPane(backend: GuiBackend, runtime: Runtime[Any], onTrackSelected: Tr
 
   private def loadPage(): Unit =
     val text = searchField.text.value
-    Unsafe.unsafe { implicit u =>
-      runtime.unsafe.fork(
-        FxBridge.runOnFx(backend.search(text, currentPage))(results =>
-          tracks.clear()
-          results.foreach(tracks.add)
-        )
-      )
-    }
+    FxBridge.run(runtime)(backend.search(text, currentPage))(
+      results =>
+        tracks.clear()
+        results.foreach(tracks.add)
+      ,
+      err =>
+        println(s"[ManageTab] search error: ${err.getMessage}")
+        err.printStackTrace()
+    )
+
+  /** Load a track into the details pane (called externally, e.g. from BrowseTab). */
+  def loadTrack(track: Track): Unit =
+    trackDetailsPane.load(track)

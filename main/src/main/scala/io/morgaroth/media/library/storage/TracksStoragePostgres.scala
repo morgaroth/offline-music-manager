@@ -18,8 +18,10 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
       finally conn.close()
 
   private def logQuery(sql: String, params: Seq[Any] = Seq.empty): Unit =
-    if params.isEmpty then logger.debug(s"SQL: $sql")
-    else logger.debug(s"SQL: $sql | params: ${params.mkString(", ")}")
+    val msg = if params.isEmpty then s"[SQL] $sql"
+              else s"[SQL] $sql | params: ${params.mkString(", ")}"
+    logger.debug(msg)
+    println(msg)
 
   private def readTrack(rs: ResultSet): Track =
     val playlists =
@@ -243,6 +245,7 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
     tracks
 
   override def genericSearch(text: String, page: Int): Task[Vector[Track]] = withConnection: conn =>
+    println(s"[SEARCH] genericSearch called with text='$text', page=$page")
     val offset = (page - 1) * 10
     val (sql, paramValues) =
       if text.trim.isEmpty then
@@ -250,10 +253,9 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
       else
         val pattern = s"%$text%"
         val q = """SELECT * FROM tracks
-          |WHERE url ILIKE ? OR artist ILIKE ? OR title ILIKE ? OR album ILIKE ?
-          |  OR status ILIKE ? OR array_to_string(playlists, ',') ILIKE ?
+          |WHERE url ILIKE ? OR artist ILIKE ? OR title ILIKE ? OR album ILIKE ? OR status ILIKE ?
           |ORDER BY updated_at DESC LIMIT 10 OFFSET ?""".stripMargin
-        (q, Vector(pattern, pattern, pattern, pattern, pattern, pattern))
+        (q, Vector(pattern, pattern, pattern, pattern, pattern))
 
     logQuery(sql, paramValues :+ s"offset=$offset")
 

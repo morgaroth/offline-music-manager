@@ -1,31 +1,30 @@
 package io.morgaroth.media.library.gui
 
 import com.typesafe.config.ConfigFactory
-import io.morgaroth.media.library.storage.{DatabaseConfig, DataSourceLive, TracksStoragePostgres}
+import io.morgaroth.media.library.storage.{DatabaseConfig, DataSourceLive, TracksStoragePostgres, ZioTracksStorageService}
 import scalafx.application.JFXApp3
-import scalafx.geometry.Insets
 import scalafx.scene.Scene
-import scalafx.scene.control.SplitPane
-import scalafx.scene.layout.{Priority, VBox}
+import scalafx.scene.control.{Tab, TabPane}
+import scalafx.scene.layout.Priority
 import zio.*
 
-/** Main ScalaFX application with ZIO 2 runtime for the music library GUI.
+/** Main ScalaFX application with ZIO 2 runtime.
   *
-  * Architecture:
-  *   - ZIO Runtime is created at startup and shared with UI components
-  *   - UI components dispatch ZIO effects via FxBridge (runs on ZIO fibers,
-  *     delivers results back on the JavaFX thread)
-  *   - GuiBackend is the ZIO service layer connecting UI to PostgreSQL storage
+  * Three tabs:
+  *   - Manage: edit track details + search/select + pull single song
+  *   - Run: launch fetcher with 3 concurrent downloads + logs + progress
+  *   - Browse: full-window search table with all columns
   */
 object MusicLibraryApp extends JFXApp3:
 
-  private val appLayer: ZLayer[Any, Throwable, GuiBackend] =
+  private val appLayer: ZLayer[Any, Throwable, GuiBackend & ZioTracksStorageService] =
     val configLayer = ZLayer.fromZIO:
       ZIO.attempt(DatabaseConfig.fromTypesafeConfig(ConfigFactory.load()))
-    configLayer >>> DataSourceLive.layer >>> TracksStoragePostgres.layer >>> GuiBackend.live
+    val storageLayer = configLayer >>> DataSourceLive.layer >>> TracksStoragePostgres.layer
+    storageLayer >+> GuiBackend.live
 
   override def start(): Unit =
-    val runtime: Runtime[GuiBackend] =
+    val runtime: Runtime[GuiBackend & ZioTracksStorageService] =
       Unsafe.unsafe { implicit u =>
         Runtime.unsafe.fromLayer(appLayer)
       }
@@ -35,28 +34,46 @@ object MusicLibraryApp extends JFXApp3:
         runtime.unsafe.run(ZIO.service[GuiBackend]).getOrThrowFiberFailure()
       }
 
-    val trackDetailsPane = TrackDetailsPane(backend, runtime)
-    val searchPane = SearchPane(backend, runtime, track => trackDetailsPane.load(track))
+    val storage: ZioTracksStorageService =
+      Unsafe.unsafe { implicit u =>
+        runtime.unsafe.run(ZIO.service[ZioTracksStorageService]).getOrThrowFiberFailure()
+      }
+
+    val manageTab = ManageTab(backend, storage, runtime)
+    val runTab = RunTab(backend, storage, runtime)
+
+    lazy val browseTab: BrowseTab = BrowseTab(backend, runtime, track => {
+      manageTab.loadTrack(track)
+      tabPane.selectionModel.value.select(0)
+    })
+
+    lazy val tabPane: TabPane = new TabPane:
+      tabs = Seq(
+        new Tab:
+          text = "Manage"
+          content = manageTab
+          closable = false
+        ,
+        new Tab:
+          text = "Run"
+          content = runTab
+          closable = false
+        ,
+        new Tab:
+          text = "Browse"
+          content = browseTab
+          closable = false
+        ,
+      )
 
     stage = new JFXApp3.PrimaryStage:
       title = "Music Library Manager"
-      width = 1000
-      height = 800
+      width = 1100
+      height = 850
       scene = new Scene:
-        content = new SplitPane:
-          orientation = scalafx.geometry.Orientation.Vertical
-          dividerPositions = 0.45
-          items.addAll(
-            new VBox:
-              padding = Insets(0)
-              children = Seq(trackDetailsPane)
-              VBox.setVgrow(trackDetailsPane, Priority.Always)
-            ,
-            new VBox:
-              padding = Insets(0)
-              children = Seq(searchPane)
-              VBox.setVgrow(searchPane, Priority.Always)
-          )
+        content = tabPane
+        tabPane.prefWidth <== this.width
+        tabPane.prefHeight <== this.height
 
   override def stopApp(): Unit =
     java.lang.System.exit(0)

@@ -10,17 +10,15 @@ import zio.*
   */
 object FxBridge:
 
-  /** Run a ZIO effect and deliver the result on the JavaFX thread. */
-  def runOnFx[R, A](effect: ZIO[R, Throwable, A])(onSuccess: A => Unit, onError: Throwable => Unit = _.printStackTrace()): ZIO[R, Nothing, Fiber.Runtime[Nothing, Unit]] =
-    effect.foldZIO(
-      err => ZIO.succeed(Platform.runLater(() => onError(err))),
-      result => ZIO.succeed(Platform.runLater(() => onSuccess(result))),
-    ).fork
-
-  /** Execute a UI update on the JavaFX application thread from a ZIO context. */
-  def onFxThread(action: => Unit): UIO[Unit] =
-    ZIO.succeed(Platform.runLater(() => action))
-
-  /** Run a ZIO effect, ignoring errors, delivering result on FX thread. */
-  def runOnFxIgnoreErrors[R, A](effect: ZIO[R, Throwable, A])(onSuccess: A => Unit): ZIO[R, Nothing, Fiber.Runtime[Nothing, Unit]] =
-    runOnFx(effect)(onSuccess, _ => ())
+  /** Run a Task effect off the FX thread and deliver the result back on it.
+    * Call this from the JavaFX thread — it forks the work onto ZIO fibers.
+    */
+  def run[A](runtime: Runtime[Any])(effect: Task[A])(onSuccess: A => Unit, onError: Throwable => Unit = _.printStackTrace()): Unit =
+    Unsafe.unsafe { implicit u =>
+      runtime.unsafe.run(
+        effect.foldZIO(
+          err => ZIO.succeed(Platform.runLater(() => onError(err))),
+          result => ZIO.succeed(Platform.runLater(() => onSuccess(result))),
+        ).forkDaemon
+      )
+    }

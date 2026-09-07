@@ -112,7 +112,7 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
             Right(())
           else
             activeDownloads.incrementAndGet()
-            val args = Seq(downloaderExec, "--restrict-filenames", "-f", "mp4", "-o", destinationPath.toPath.toString, url)
+            val args = Seq(downloaderExec, "--restrict-filenames", "--cookies-from-browser", "chrome", "-f", "bestaudio", "-o", destinationPath.toPath.toString, url)
             if debug then logger.debug("--> {}", args.mkString(" "))
             val result = try Right(args.!!) catch case e: Throwable => Left(e)
             activeDownloads.decrementAndGet()
@@ -136,7 +136,7 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
     val sbStdErr = StringBuilder()
     val l = ProcessLogger(s => sbStdOut.append(s).append("\n"), s => sbStdErr.append(s).append("\n"))
     val args: Seq[String] = Vector(
-      Seq("ffmpeg"),
+      Seq("ffmpeg", "-y"),
       logging,
       inputArgs,
       Seq("-i", input.getAbsolutePath),
@@ -144,26 +144,35 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
     ).flatten
 
     if debug then logger.debug("--> {}", args.mkString(" "))
-    val stdOut = args.!!(l)
-    if stdOut.isEmpty && sbStdOut.isEmpty && sbStdErr.nonEmpty then sbStdErr.mkString
-    else if stdOut.isEmpty && sbStdOut.nonEmpty && sbStdErr.isEmpty then sbStdOut.mkString
-    else if stdOut.nonEmpty && sbStdOut.isEmpty && sbStdErr.isEmpty then stdOut
-    else if stdOut.isEmpty && sbStdOut.isEmpty && sbStdErr.isEmpty then ""
-    else throw IllegalArgumentException(s"multiple sources contain data! raw: ${stdOut.length}, sbOut: ${sbStdOut.length} sbErr: ${sbStdErr.length}")
+    val exitCode = args.!(l)
+    if exitCode != 0 then
+      logger.warn(s"ffmpeg exited with code $exitCode: ${sbStdErr.mkString.take(200)}")
+    sbStdErr.mkString + sbStdOut.mkString
 
   private def findMaxValue(file: File, debug: Boolean): Double =
+    println(s"[ffmpeg] volumedetect on ${file.getName}")
     val output = ffmpeg()(file)("-af", "volumedetect", "-sn", "-dn", "-f", "null")(File("/dev/null"))(quiet = false, debug)
+    println(s"[ffmpeg] volumedetect done, output length=${output.length}")
     val maxVolumeLine = output.split("\n").filter(_.contains("max_volume:"))
-    assert(maxVolumeLine.length == 1)
-    maxVolumeLine.head.split(" ")(4).toDouble
+    if maxVolumeLine.isEmpty then
+      println(s"[ffmpeg] WARNING: no max_volume found in output, defaulting to 0.0")
+      0.0
+    else
+      maxVolumeLine.head.split(" ")(4).toDouble
 
   private def convertToMP3(source: File, config: Configuration, track: Track): File =
     val target = File(source.getParent, source.getName.split("""\.""").init.mkString + ".mp3")
+    println(s"[convert] source=${source.getName}, target=${target.getName}, exists=${target.exists()}")
     if !target.exists() || config.forceLevel > 1 then
+      println(s"[convert] running volume detection...")
       val maxVolume = Option(Option(findMaxValue(source, config.debug)).map(_ * -1).getOrElse(0d) + track.volumeChange.map(_.toDouble).getOrElse(0d)).filter(_ != 0)
       target.delete()
       val reVolumeArgs = maxVolume.map(x => Seq("-af", s"volume=${x}dB")).getOrElse(Seq.empty)
+      println(s"[convert] encoding to mp3...")
       ffmpeg()(source)(reVolumeArgs ++ Seq("-q:a", "0", "-acodec", "libmp3lame")*)(target)(quiet = true, debug = config.debug)
+      println(s"[convert] done, target exists=${target.exists()}")
+    else
+      println(s"[convert] skipped, target already exists")
     target
 
   private def strip(source: File, definition: Track, debug: Boolean): File =
