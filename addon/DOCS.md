@@ -20,23 +20,19 @@ network so an [OpenClaw](https://github.com/openclaw/openclaw) agent can drive i
 
 ## Installation
 
-The add-on ships a **pre-staged** JVM app, so the Supervisor only builds a small
-runtime image (no sbt/JDK build on your HA box).
+The add-on **pulls a prebuilt image** (published by CI) — the Supervisor does not
+build anything on your HA box. `config.yaml` sets `image:` to the per-architecture
+image repo and `version:` to the tag to pull.
 
-1. On a machine with `sbt`, run the staging step from the repo root:
-   ```bash
-   ./addon/stage-addon.sh
-   ```
-   This compiles the `http` module and copies the runnable app into
-   `addon/rootfs/opt/music-library`. Commit/publish that so the add-on build
-   context contains it.
-2. In Home Assistant: Settings → Add-ons → Add-on Store → ⋮ → **Repositories**,
+1. In Home Assistant: Settings → Add-ons → Add-on Store → ⋮ → **Repositories**,
    add the Git URL of this project.
-3. Install **Offline Music Library**, configure it (below), then start.
+2. Install **Offline Music Library**, configure it (below), then start. On
+   install/update the Supervisor pulls the image matching your architecture
+   (`amd64` or `aarch64`) at the `version` tag.
 
-The Supervisor build context is the `addon/` directory; its `Dockerfile`
-installs the JRE, `nfs-utils`, `ffmpeg`, `yt-dlp`, and `mutagen`, then copies the
-staged app.
+The image is HA-agnostic (a plain JRE image with `ffmpeg`, `yt-dlp`, `nfs-common`,
+and `mutagen` bundled). The same image runs standalone with `docker run` — see the
+project README.
 
 ## Network access
 
@@ -64,10 +60,10 @@ postgres_password: "changeme"
 | Option              | Description                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
 | `http_port`         | Host port for the UI + API. Reachable as `http://<HAOS-IP>:<port>`.                                |
-| `nfs_enabled`       | Mount an NFS share for output. If `false`, output goes to `/share/<output_subdir>` instead.       |
+| `nfs_enabled`       | Mount an NFS share for output. If `false`, set `MUSIC_LIBRARY_OUTPUT_DIR` or a default under the home dir is used. |
 | `nfs_export`        | NFS export, `server:/export/path`. Required when `nfs_enabled` is true.                            |
 | `nfs_options`       | `mount -o` options for the NFS mount.                                                              |
-| `output_subdir`     | Subdirectory (under the NFS mount, or under `/share`) where finished tracks are written.          |
+| `output_subdir`     | Subdirectory under the NFS mount (`/mnt/music/<output_subdir>`) where finished tracks are written. |
 | `postgres_url`      | Full JDBC URL. If set, it overrides the host/port/database fields.                                |
 | `postgres_host`     | Postgres host (used when `postgres_url` is empty).                                                 |
 | `postgres_port`     | Postgres port.                                                                                     |

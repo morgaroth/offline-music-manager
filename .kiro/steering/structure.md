@@ -33,19 +33,21 @@ offline-music-manager/
 │       │   ├── MusicRoutes.scala     # UI + JSON API routes
 │       │   ├── WebUi.scala           # self-contained inline HTML/CSS/JS UI
 │       │   ├── JsonCodecs.scala      # circe codecs for Track/TrackStatus
-│       │   ├── ServerConfig.scala    # env-driven port/output/cache/downloader
+│       │   ├── OptionsSource.scala   # /data/options.json | MUSIC_LIBRARY_* env | default
+│       │   ├── ServerConfig.scala    # port/output/cache resolved via OptionsSource
 │       │   └── JobRegistry.scala     # async fetch jobs (forkDaemon + Ref status)
 │       └── storage/
 │           ├── DatabaseConfig.scala          # config + DataSourceLive (Hikari + Flyway)
 │           └── TracksStoragePostgres.scala   # JDBC impl of ZioTracksStorageService
 │
-├── addon/                        # Home Assistant add-on (Docker)
-│   ├── config.yaml               # options/schema, ports, map, privileges
-│   ├── build.yaml                # base image per arch (HA Ubuntu base)
-│   ├── Dockerfile                # JRE + ffmpeg + yt-dlp + nfs + mutagen; COPY rootfs
-│   ├── DOCS.md                   # add-on install/config docs
-│   ├── stage-addon.sh            # sbt http/stage → rootfs/opt/music-library
-│   └── rootfs/run.sh             # bashio: mount NFS, build PG url, exec app
+├── Dockerfile                    # root, HA-agnostic image (multi-stage sbt → temurin JRE)
+├── docker/entrypoint.sh          # sh+jq: mount NFS if configured, ensure dirs, exec app
+├── .gitlab-ci.yml                # verify:compile + per-arch buildx push
+├── .dockerignore
+│
+├── addon/                        # Home Assistant add-on (pull model)
+│   ├── config.yaml               # image:/version: pull, native options schema, ports, map, privileges
+│   └── DOCS.md                   # add-on install/config docs
 │
 └── openclaw-plugin/              # OpenClaw agent entrypoint (TypeScript)
     ├── openclaw.plugin.json      # manifest (contracts.tools)
@@ -65,9 +67,12 @@ offline-music-manager/
   `ZIO.blocking`.
 - **Storage**: every method returns `Task[...]`. Hand-written JDBC; every query is
   logged via a `logQuery` helper.
-- **Config precedence**: env vars override `application.conf`
-  (`MUSIC_LIBRARY_POSTGRES_URL/USER/PASSWORD`) and drive `ServerConfig`
-  (`MUSIC_LIBRARY_HTTP_PORT/OUTPUT_DIR/CACHE_DIR/DOWNLOADER`).
+- **Config precedence** (`OptionsSource`): `/data/options.json` (HA add-on) →
+  `MUSIC_LIBRARY_*` env (standalone) → default / `application.conf`. `HttpApp`
+  builds `DatabaseConfig` (full `postgres_url` or host/port/db parts) and
+  `ServerConfig` (`http_port`, `output_subdir` under `/mnt/music` when
+  `nfs_enabled`, else `MUSIC_LIBRARY_OUTPUT_DIR`). The bundled downloader is
+  `yt-dlp` (not a user option; `MUSIC_LIBRARY_DOWNLOADER` env is an escape hatch).
 
 ## Database
 

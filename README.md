@@ -64,17 +64,47 @@ sbt "http/stage"         # produce a runnable app under http/target/universal/st
 The UI and API listen on `:8080` by default (`MUSIC_LIBRARY_HTTP_PORT` to change).
 Open `http://localhost:8080`.
 
-## Docker / Home Assistant add-on
+## Docker
 
-The add-on lives in `addon/`. Because it ships a pre-staged JVM app, run the
-staging step once before building the image:
+The root `Dockerfile` builds a self-contained, HA-agnostic image (multi-stage: sbt
+build → slim JRE runtime with `ffmpeg`, `yt-dlp`, `nfs-common`, `mutagen`). Run it
+standalone:
 
 ```bash
-./addon/stage-addon.sh
+docker build -t offline-music-manager .
+docker run --rm -p 8080:8080 \
+  -e MUSIC_LIBRARY_POSTGRES_URL="jdbc:postgresql://<host>:5432/music_library" \
+  -e MUSIC_LIBRARY_POSTGRES_USER=postgres \
+  -e MUSIC_LIBRARY_POSTGRES_PASSWORD=... \
+  -e MUSIC_LIBRARY_OUTPUT_DIR=/downloads \
+  offline-music-manager
 ```
 
-See `addon/DOCS.md` for install and configuration (external Postgres, NFS output
-for Navidrome, port).
+Open `http://localhost:8080`.
+
+### Configuration precedence
+
+The image reads config from, in order:
+1. `/data/options.json` — supplied by the Home Assistant Supervisor (add-on).
+2. `MUSIC_LIBRARY_*` environment variables — the standalone `docker run` path.
+3. `application.conf` defaults.
+
+Nothing in the image is HA-specific; it only knows to read `/data/options.json`
+if that file happens to exist.
+
+### CI / registry
+
+`.gitlab-ci.yml` compiles the build and publishes per-architecture images
+(`.../amd64`, `.../aarch64`) on the default branch (`:latest`) and on version tags
+(`:<tag>`). HA add-ons reference one image repo per architecture, so these are
+single-arch images, not a multi-arch manifest.
+
+## Home Assistant add-on
+
+The add-on (`addon/`) **pulls** the CI-built image (`image:`/`version:` in
+`config.yaml`) — HAOS builds nothing. It presents a native options UI (Postgres,
+NFS export, port) and mounts the NFS share for Navidrome output. See
+`addon/DOCS.md`.
 
 ## OpenClaw
 

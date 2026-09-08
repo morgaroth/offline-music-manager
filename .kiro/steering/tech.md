@@ -38,11 +38,27 @@ the app is now HTTP-only, shipped as a Docker image / Home Assistant add-on.
 
 ## Deliverables outside the sbt build
 
-- **addon/** — Home Assistant add-on (Docker). `config.yaml`, `build.yaml`,
-  `Dockerfile` (HA Ubuntu base + JRE/ffmpeg/yt-dlp/nfs/mutagen), `rootfs/run.sh`
-  (bashio), `stage-addon.sh` (pre-stages the app into `rootfs/opt/music-library`).
+- **Dockerfile** (repo root) — HA-agnostic image. Multi-stage: `sbtscala/scala-sbt`
+  builder runs `sbt http/stage`, runtime is `eclipse-temurin:21-jre` + apt
+  `ffmpeg`/`nfs-common`/`python3-mutagen`/`jq` + the `yt-dlp` standalone binary.
+  No committed staged jars. `docker/entrypoint.sh` (sh + jq, no bashio) mounts NFS
+  if configured, then execs the app.
+- **.gitlab-ci.yml** — `verify:compile` + per-arch `build:amd64`/`build:aarch64`
+  (buildx, pushed to `$REGISTRY_IMAGE/<arch>:<tag>`). HA add-ons need one image
+  repo per architecture, not a multi-arch manifest.
+- **addon/** — Home Assistant add-on. `config.yaml` only (+ `DOCS.md`): it uses
+  `image:`/`version:` to **pull** the CI image; HAOS builds nothing. Keeps the
+  native options schema for the HA config UI.
 - **openclaw-plugin/** — TypeScript OpenClaw plugin registering agent tools that
   call the HTTP API.
+
+## Configuration source
+
+`OptionsSource` (in the `http` module) resolves every setting with precedence:
+`/data/options.json` (HA add-on) → `MUSIC_LIBRARY_*` env (standalone) → default /
+`application.conf`. The image is HA-agnostic: it only knows to read
+`/data/options.json` if present. `HttpApp` builds `DatabaseConfig` (full
+`postgres_url` or host/port/db parts) and `ServerConfig` from it.
 
 ## Entry point
 
@@ -57,14 +73,14 @@ sbt "http/compile"          # compile the app (and domain transitively)
 sbt "http/run"              # run the server locally (serve mode)
 sbt "http/run fetch"        # run the batch downloader
 sbt "http/stage"            # produce the runnable app under http/target/universal/stage
-./addon/stage-addon.sh      # stage + copy app into the add-on build context
+docker build -t offline-music-manager .   # build the HA-agnostic image (root Dockerfile)
 ```
 
 ## Verify after changes
 
 Always run `sbt "http/compile"` before declaring done. For container changes,
-re-run `./addon/stage-addon.sh` then `podman build` (or `docker build`) the
-add-on image.
+`docker build` (or `podman build`) the root image; CI builds the per-arch images
+the add-on pulls.
 
 ## Deferred / future work
 
