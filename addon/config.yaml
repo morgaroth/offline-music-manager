@@ -1,0 +1,52 @@
+---
+name: Offline Music Library
+version: "0.2.0"
+slug: music_library
+description: >-
+  Download and manage a music library, writing finished tracks to an NFS share
+  (e.g. for Navidrome). Exposes an HTTP UI + JSON API for an OpenClaw agent.
+url: https://gitlab.com/mateuszjajedev/offline-music-manager
+arch:
+  - amd64
+  - aarch64
+init: false
+# NFS mounting inside the container requires elevated privileges.
+privileged:
+  - SYS_ADMIN
+  - DAC_READ_SEARCH
+apparmor: false
+# Map HA storage too, so the output dir can alternatively point at /share or /media.
+map:
+  - share:rw
+  - media:rw
+# Fixed host port -> reachable as IP:PORT on the local network (OpenClaw uses this).
+ports:
+  "8080/tcp": 8080
+ports_description:
+  "8080/tcp": Web UI and JSON API (used by the OpenClaw plugin)
+options:
+  http_port: 8080
+  nfs_enabled: true
+  nfs_export: "192.168.0.20:/volume1/music"
+  nfs_options: "rw,vers=4,proto=tcp,hard,timeo=600"
+  output_subdir: "offline-music-manager"
+  postgres_url: ""
+  postgres_host: "core-postgres"
+  postgres_port: 5432
+  postgres_database: "music_library"
+  postgres_user: "postgres"
+  postgres_password: ""
+  downloader_exec: "yt-dlp"
+schema:
+  http_port: port
+  nfs_enabled: bool
+  nfs_export: str?
+  nfs_options: str?
+  output_subdir: str
+  postgres_url: str?
+  postgres_host: str?
+  postgres_port: port?
+  postgres_database: str?
+  postgres_user: str?
+  postgres_password: password?
+  downloader_exec: str

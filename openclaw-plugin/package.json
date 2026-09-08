@@ -1,0 +1,23 @@
+{
+  "name": "@morgaroth/openclaw-music-library",
+  "version": "0.1.0",
+  "description": "OpenClaw tools for the offline music library (search, edit, and fetch tracks)",
+  "type": "module",
+  "dependencies": {
+    "typebox": "1.3.18"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.24-beta.2"
+  },
+  "openclaw": {
+    "extensions": ["./src/index.ts"],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2",
+      "minGatewayVersion": "2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2",
+      "pluginSdkVersion": "2026.3.24-beta.2"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "music-library",
+  "name": "Offline Music Library",
+  "description": "Search, inspect, edit, and fetch tracks in the offline music library via its HTTP API",
+  "contracts": {
+    "tools": [
+      "music_search",
+      "music_get_track",
+      "music_add_track",
+      "music_update_track",
+      "music_list_playlists",
+      "music_fetch_track",
+      "music_job_status"
+    ]
+  },
+  "toolMetadata": {
+    "music_add_track": { "optional": true },
+    "music_update_track": { "optional": true },
+    "music_fetch_track": { "optional": true }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "Base URL of the music library HTTP API",
+        "default": "http://127.0.0.1:8080"
+      }
+    }
+  }
+}

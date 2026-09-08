@@ -2,6 +2,7 @@ import scala.sys.process.stringSeqToProcess
 
 val scala3Version = "3.3.3"
 val zioVersion = "2.1.6"
+val zioHttpVersion = "3.11.4"
 val circeVersion = "0.14.9"
 val scalaFxVersion = "22.0.0-R33"
 val javaFxVersion = "22"
@@ -63,9 +64,21 @@ lazy val main = project.in(file("main"))
     },
   )
 
+lazy val http = project.in(file("http"))
+  .dependsOn(main)
+  .settings(commonSettings)
+  .enablePlugins(JavaAppPackaging)
+  .settings(
+    name := "MusicLibraryHttp",
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-http" % zioHttpVersion,
+    ),
+  )
+
 lazy val osName = System.getProperty("os.name") match {
   case n if n.startsWith("Linux")   => "linux"
-  case n if n.startsWith("Mac")     => "mac"
+  case n if n.startsWith("Mac")     =>
+    if (System.getProperty("os.arch") == "aarch64") "mac-aarch64" else "mac"
   case n if n.startsWith("Windows") => "win"
   case _ => throw new Exception("Unknown platform!")
 }
@@ -85,7 +98,7 @@ val SecondImpl = project.in(file("second-impl"))
 
 val root = project.in(file("."))
   .settings(commonSettings)
-  .aggregate(domain, main, SecondImpl)
+  .aggregate(domain, main, http, SecondImpl)
   .settings(
     name := "MusicLibrary",
   )
