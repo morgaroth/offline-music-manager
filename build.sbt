@@ -1,19 +1,11 @@
-import scala.sys.process.stringSeqToProcess
-
 val scala3Version = "3.3.3"
 val zioVersion = "2.1.6"
 val zioHttpVersion = "3.11.4"
 val circeVersion = "0.14.9"
-val scalaFxVersion = "22.0.0-R33"
-val javaFxVersion = "22"
-
-val deploy = taskKey[Unit]("Deploy deb.")
-val disabledMainClasses = Set("io.morgaroth.media.library.jobs.GUIApp")
 
 val commonSettings = Seq(
   version := "0.2",
   scalaVersion := scala3Version,
-  maintainer := "Mateusz Jaje <mateuszjaje@gmail.com>",
   Compile / doc / sources := Seq.empty,
   Compile / packageDoc / publishArtifact := false,
   scalacOptions ++= Seq(
@@ -23,6 +15,8 @@ val commonSettings = Seq(
   ),
 )
 
+// The shared library: domain model, storage interface, fetcher/executor,
+// and CLI Configuration. Dependency-light (no JDBC/HTTP).
 val domain = project.in(file("domain"))
   .settings(commonSettings)
   .settings(
@@ -40,13 +34,17 @@ val domain = project.in(file("domain"))
     ).map(_ % circeVersion),
   )
 
-lazy val main = project.in(file("main"))
+// The single application: Postgres storage impl, HTTP server, web UI, JSON API,
+// and the serve/fetch dispatcher entrypoint (io.morgaroth.media.library.http.HttpApp).
+lazy val http = project.in(file("http"))
   .dependsOn(domain)
   .settings(commonSettings)
-  .enablePlugins(JavaAppPackaging, DebianPlugin)
+  .enablePlugins(JavaAppPackaging)
   .settings(
-    name := "MusicLibraryMain",
+    name := "MusicLibraryHttp",
+    maintainer := "Mateusz Jaje <mateuszjaje@gmail.com>",
     libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-http" % zioHttpVersion,
       "org.postgresql" % "postgresql" % "42.7.3",
       "com.zaxxer" % "HikariCP" % "5.1.0",
       "org.flywaydb" % "flyway-core" % "10.15.0",
@@ -54,51 +52,11 @@ lazy val main = project.in(file("main"))
       "com.typesafe" % "config" % "1.4.3",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
     ),
-    debianPackageDependencies += "java17-runtime-headless",
-    Compile / discoveredMainClasses := {
-      (Compile / discoveredMainClasses).value.filterNot(disabledMainClasses)
-    },
-    deploy := {
-      val outputFile = (Debian / packageBin).toTask.value
-      Seq("./deploy.sh", outputFile.getCanonicalPath).!
-    },
-  )
-
-lazy val http = project.in(file("http"))
-  .dependsOn(main)
-  .settings(commonSettings)
-  .enablePlugins(JavaAppPackaging)
-  .settings(
-    name := "MusicLibraryHttp",
-    libraryDependencies ++= Seq(
-      "dev.zio" %% "zio-http" % zioHttpVersion,
-    ),
-  )
-
-lazy val osName = System.getProperty("os.name") match {
-  case n if n.startsWith("Linux")   => "linux"
-  case n if n.startsWith("Mac")     =>
-    if (System.getProperty("os.arch") == "aarch64") "mac-aarch64" else "mac"
-  case n if n.startsWith("Windows") => "win"
-  case _ => throw new Exception("Unknown platform!")
-}
-
-val SecondImpl = project.in(file("second-impl"))
-  .dependsOn(main)
-  .settings(commonSettings)
-  .settings(
-    name := "MusicLibraryGUI",
-    libraryDependencies ++= Seq("base", "controls", "fxml", "graphics", "media", "web").map(m =>
-      "org.openjfx" % s"javafx-$m" % javaFxVersion classifier osName
-    ),
-    libraryDependencies ++= Seq(
-      "org.scalafx" %% "scalafx" % scalaFxVersion,
-    ),
   )
 
 val root = project.in(file("."))
   .settings(commonSettings)
-  .aggregate(domain, main, http, SecondImpl)
+  .aggregate(domain, http)
   .settings(
     name := "MusicLibrary",
   )

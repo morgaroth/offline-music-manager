@@ -6,11 +6,20 @@ import io.morgaroth.media.library.storage.{DatabaseConfig, DataSourceLive, Track
 import zio.*
 import zio.http.*
 
-/** Headless HTTP entrypoint for the music library.
+/** Single entrypoint for the music library container.
   *
-  * Reuses the exact layer stack from `jobs.Boot` (config -> datasource ->
-  * postgres storage -> fetcher) and adds the job registry, routes, and server.
-  * The port can be overridden with MUSIC_LIBRARY_HTTP_PORT (default 8080).
+  * Dispatches on the first CLI argument so the same image can be used two ways,
+  * both logging to stdout (visible via `docker logs` / the HA add-on log page):
+  *
+  *   - `serve` (default, and what the add-on / `docker run` with no args uses)
+  *       Starts the HTTP server: web UI + JSON API + async fetch jobs.
+  *   - `fetch [opts]`
+  *       Runs the batch downloader in the foreground over all ready-to-fetch
+  *       tracks, then exits. Options are parsed by `Args` (scopt).
+  *
+  * Postgres connection is read from application.conf, which honors the
+  * MUSIC_LIBRARY_POSTGRES_* env vars. Server/output config comes from
+  * ServerConfig (env-driven).
   */
 object HttpApp extends ZIOAppDefault:
 
@@ -26,8 +35,8 @@ object HttpApp extends ZIOAppDefault:
 
   private val serverConfig: ServerConfig = ServerConfig.fromEnv
 
-  /** Ensure the configured output/cache directories exist before serving.
-    * On an NTFS mount this also surfaces permission problems early.
+  /** Ensure the configured output/cache directories exist. On an NFS mount this
+    * also surfaces permission problems early.
     */
   private val ensureDirs: Task[Unit] =
     ZIO.attempt:
@@ -35,7 +44,9 @@ object HttpApp extends ZIOAppDefault:
       serverConfig.cacheDir.mkdirs()
     .unit
 
-  private val program: ZIO[MusicRoutes & Server, Throwable, Unit] =
+  // --- serve mode -----------------------------------------------------------
+
+  private val serveProgram: ZIO[MusicRoutes & Server, Throwable, Unit] =
     for
       routes <- ZIO.service[MusicRoutes]
       _ <- ensureDirs
@@ -44,8 +55,8 @@ object HttpApp extends ZIOAppDefault:
       _ <- Server.serve(routes.routes)
     yield ()
 
-  override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+  private val serve: ZIO[Any, Throwable, Unit] =
+    serveProgram.provide(
       storageLayer,
       fetcherLayer,
       ServerConfig.live,
@@ -53,3 +64,23 @@ object HttpApp extends ZIOAppDefault:
       MusicRoutes.live,
       Server.defaultWithPort(serverConfig.port),
     )
+
+  // --- fetch mode -----------------------------------------------------------
+
+  private def fetch(args: List[String]): ZIO[Any, Throwable, Unit] =
+    ensureDirs *>
+      ZIO.logInfo("Running batch fetch...") *>
+      ZIO.serviceWithZIO[ZIOFetcher](_.main(args)).provide(storageLayer, fetcherLayer)
+
+  // --- dispatch -------------------------------------------------------------
+
+  override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
+    for
+      args <- getArgs.map(_.toList)
+      _ <- args match
+        case Nil | ("serve" :: _)  => serve
+        case "fetch" :: rest       => fetch(rest)
+        case cmd :: _              =>
+          ZIO.logError(s"Unknown command '$cmd'. Valid commands: serve (default), fetch") *>
+            ZIO.fail(IllegalArgumentException(s"Unknown command: $cmd"))
+    yield ()

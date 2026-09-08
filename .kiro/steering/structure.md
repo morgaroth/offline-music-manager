@@ -2,16 +2,16 @@
 
 ```
 offline-music-manager/
-├── build.sbt                     # 3 modules: domain, main, SecondImpl
+├── build.sbt                     # 2 modules: domain, http
 ├── project/
-│   ├── build.properties          # sbt 1.10.1
+│   ├── build.properties          # sbt version
 │   └── plugins.sbt               # sbt-native-packager 1.10.0
+├── repository.yaml               # marks repo as an HA add-on repository
 ├── SYNC.md                       # Navidrome-over-NFS automount setup guide
-├── migrate_mongo_to_postgres.py  # one-time Mongo → Postgres migration (uv run)
 │
-├── domain/src/main/scala/io/morgaroth/media/library/
+├── domain/src/main/scala/io/morgaroth/media/library/   # shared library
 │   ├── package.scala             # ErrorOr alias, md5HashString
-│   ├── arguments.scala           # Configuration + Args (scopt OParser)
+│   ├── arguments.scala           # Configuration + Args (scopt OParser, for `fetch`)
 │   ├── common/package.scala      # given Ordering[ZonedDateTime]
 │   ├── storage/
 │   │   ├── TrackStatus.scala     # enum Draft/Final/Deleted
@@ -22,43 +22,61 @@ offline-music-manager/
 │       ├── MetaDataFetcher.scala # yt-dlp --print-json wrapper
 │       └── ZIOFetcher.scala      # download → convert → trim → tag → playlists pipeline
 │
-├── main/src/main/
+├── http/src/main/               # the single application (depends on domain)
 │   ├── resources/
 │   │   ├── application.conf      # music-library.postgres.{url,user,password} (+ env overrides)
-│   │   ├── logback.xml           # storage pkg at DEBUG for SQL logging
+│   │   ├── logback.xml           # console appender; storage pkg at DEBUG
 │   │   └── db/migration/V1__create_tracks_table.sql
 │   └── scala/io/morgaroth/media/library/
-│       ├── jobs/Boot.scala       # ZIOAppDefault entry point (fetch / gui)
+│       ├── http/
+│       │   ├── HttpApp.scala         # entrypoint dispatcher: serve (default) / fetch
+│       │   ├── MusicRoutes.scala     # UI + JSON API routes
+│       │   ├── WebUi.scala           # self-contained inline HTML/CSS/JS UI
+│       │   ├── JsonCodecs.scala      # circe codecs for Track/TrackStatus
+│       │   ├── ServerConfig.scala    # env-driven port/output/cache/downloader
+│       │   └── JobRegistry.scala     # async fetch jobs (forkDaemon + Ref status)
 │       └── storage/
 │           ├── DatabaseConfig.scala          # config + DataSourceLive (Hikari + Flyway)
-│           └── TracksStoragePostgres.scala   # JDBC impl + TracksStorageService layer
+│           └── TracksStoragePostgres.scala   # JDBC impl of ZioTracksStorageService
 │
-└── second-impl/src/main/scala/io/morgaroth/media/library/gui/
-    ├── MusicLibraryApp.scala     # JFXApp3, builds ZIO runtime from layer, 3 tabs
-    ├── FxBridge.scala            # runs Task off-thread, delivers result on FX thread
-    ├── GuiBackend.scala          # ZIO service wrapping ZioTracksStorageService
-    ├── ManageTab.scala           # SplitPane: TrackDetailsPane + compact search table
-    ├── TrackDetailsPane.scala    # single-track editor + "Pobierz" (pull) button
-    ├── RunTab.scala              # 3 concurrent workers, per-worker logs + progress
-    └── BrowseTab.scala           # full-window search table, dbl-click → Manage tab
+├── addon/                        # Home Assistant add-on (Docker)
+│   ├── config.yaml               # options/schema, ports, map, privileges
+│   ├── build.yaml                # base image per arch (HA Ubuntu base)
+│   ├── Dockerfile                # JRE + ffmpeg + yt-dlp + nfs + mutagen; COPY rootfs
+│   ├── DOCS.md                   # add-on install/config docs
+│   ├── stage-addon.sh            # sbt http/stage → rootfs/opt/music-library
+│   └── rootfs/run.sh             # bashio: mount NFS, build PG url, exec app
+│
+└── openclaw-plugin/              # OpenClaw agent entrypoint (TypeScript)
+    ├── openclaw.plugin.json      # manifest (contracts.tools)
+    ├── package.json
+    └── src/index.ts              # registerTool(...) -> HTTP calls
 ```
 
 ## Architecture conventions
 
-- **Layer wiring**: `DatabaseConfig` → `DataSourceLive.layer` → `TracksStoragePostgres.layer`
-  → (`GuiBackend.live` for GUI, or `ZIOFetcher.live` for CLI).
-- **GUI ↔ ZIO bridge**: UI runs on the JavaFX thread. To run an effect, call
-  `FxBridge.run(runtime)(task)(onSuccess, onError)`. It forks the effect onto ZIO
-  fibers and delivers the result back via `Platform.runLater`. **Wrap blocking
-  fetch/ffmpeg work in `ZIO.blocking`** — the GUI runtime's default executor is
-  limited and blocking process calls will starve it otherwise (this was a real bug).
+- **Layer wiring**: `DatabaseConfig` → `DataSourceLive.layer` →
+  `TracksStoragePostgres.layer` → `ZIOFetcher.live` / `JobRegistry.live` /
+  `MusicRoutes.live`. See `HttpApp`.
+- **Entry point**: one dispatcher, `HttpApp`. Args select `serve` (default) or
+  `fetch`. Both log to stdout so `docker logs` / the HA add-on log page show them.
+- **Fetches are async over HTTP**: `POST /tracks/{id}/fetch` forks a daemon fiber
+  and returns a job id; poll `GET /jobs/{id}`. Wrap blocking fetch/ffmpeg work in
+  `ZIO.blocking`.
 - **Storage**: every method returns `Task[...]`. Hand-written JDBC; every query is
-  logged via a `logQuery` helper (currently also `println` for visibility).
-- **Naming**: UI labels are in Polish (Zapisz, Pobierz, Szukaj, Twórca, Tytuł, etc.).
+  logged via a `logQuery` helper.
+- **Config precedence**: env vars override `application.conf`
+  (`MUSIC_LIBRARY_POSTGRES_URL/USER/PASSWORD`) and drive `ServerConfig`
+  (`MUSIC_LIBRARY_HTTP_PORT/OUTPUT_DIR/CACHE_DIR/DOWNLOADER`).
 
 ## Database
 
 - Table `tracks`, UUID PK, `TEXT[]` playlists column, `TIMESTAMPTZ` dates.
 - Create the DB manually first: `createdb music_library`. Flyway creates the schema
   on first connection but does NOT create the database itself.
-- Config via env: `MUSIC_LIBRARY_POSTGRES_URL/USER/PASSWORD`.
+
+## Deferred / future work
+
+- Live executor logs streamed into the UI (SSE): three log panes for the bulk
+  fetch (parallel workers kept separate) + a single log for single-track "sync
+  this one now". Currently logs go to the container console only.

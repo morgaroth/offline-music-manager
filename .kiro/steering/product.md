@@ -14,12 +14,25 @@ tags them with ID3 metadata, and organizes them into playlists on the local file
    trimming to start/end, and fade-out effects.
 4. **Tagging** — `mid3v2` (python-mutagen) writes ID3 tags and a UFID hash used for
    change detection (avoids re-processing unchanged tracks).
-5. **GUI** — a ScalaFX desktop app with three tabs:
-   - **Manage**: edit a single track's details, search/select, pull one song.
-   - **Run**: batch-download with 3 concurrent workers, per-worker logs + progress.
-   - **Browse**: full-window searchable table of all tracks.
-6. **CLI** — `Boot` entry point supports `fetch`/`boot`/`work` (batch downloader) and
-   `gui` (which just points to the second-impl GUI).
+5. **Web UI + JSON API** — a single HTTP service (zio-http) serves a self-contained
+   web UI for searching, adding, editing, and fetching tracks, and a JSON API used
+   by automation. Fetches run asynchronously as pollable jobs.
+6. **Entry point** — one dispatcher: `serve` (default; HTTP server + UI + API) and
+   `fetch` (foreground batch downloader). Both log to stdout.
+7. **OpenClaw plugin** — exposes the API as agent tools so tracks can be managed by
+   sharing a link with an OpenClaw agent.
+
+## Delivery
+
+- Runs standalone as a **Docker image** (bind a port, open the UI from localhost).
+- Runs as a **Home Assistant add-on** (same container, HA supplies config + an NFS
+  mount for the Navidrome music volume).
+
+## Deferred / future work
+
+- Live executor logs in the UI: three separate log panes for the bulk fetch (so
+  parallel workers don't interleave) plus a single log for a single-track
+  "sync this one now" action. Not yet built — logs currently go to the console.
 
 ## External tool dependencies (must be on PATH at runtime)
 
