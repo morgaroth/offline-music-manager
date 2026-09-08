@@ -1,6 +1,6 @@
 ---
 name: Offline Music Library
-version: "1.2.0"
+version: "1.2.1"
 slug: music_library
 description: >-
   Download and manage a music library, writing finished tracks to an NFS share
