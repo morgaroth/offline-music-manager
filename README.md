@@ -61,8 +61,8 @@ sbt "http/run fetch"     # CLI batch download of all ready-to-fetch tracks
 sbt "http/stage"         # produce a runnable app under http/target/universal/stage
 ```
 
-The UI and API listen on `:8080` by default (`MUSIC_LIBRARY_HTTP_PORT` to change).
-Open `http://localhost:8080`.
+The UI and API listen on `:57381` by default (`MUSIC_LIBRARY_HTTP_PORT` to change).
+Open `http://localhost:57381`.
 
 ## Docker
 
@@ -72,7 +72,7 @@ standalone:
 
 ```bash
 docker build -t offline-music-manager .
-docker run --rm -p 8080:8080 \
+docker run --rm -p 57381:57381 \
   -e MUSIC_LIBRARY_POSTGRES_URL="jdbc:postgresql://<host>:5432/music_library" \
   -e MUSIC_LIBRARY_POSTGRES_USER=postgres \
   -e MUSIC_LIBRARY_POSTGRES_PASSWORD=... \
@@ -80,7 +80,7 @@ docker run --rm -p 8080:8080 \
   offline-music-manager
 ```
 
-Open `http://localhost:8080`.
+Open `http://localhost:57381`.
 
 ### Configuration precedence
 

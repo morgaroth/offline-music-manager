@@ -13,7 +13,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
  * call them.
  */
 
-const DEFAULT_BASE_URL = "http://127.0.0.1:8080";
+const DEFAULT_BASE_URL = "http://127.0.0.1:57381";
 
 function resolveBaseUrl(api: unknown): string {
   // Plugin config is validated against configSchema.baseUrl; fall back to the

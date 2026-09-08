@@ -1,6 +1,6 @@
 ---
 name: Offline Music Library
-version: "1.1.0"
+version: "1.2.0"
 slug: music_library
 description: >-
   Download and manage a music library, writing finished tracks to an NFS share
@@ -24,16 +24,20 @@ map:
   - share:rw
   - media:rw
 # Fixed host port -> reachable as IP:PORT on the local network (OpenClaw uses this).
+# 57381 is in the IANA dynamic/private range (49152-65535) to avoid collisions.
 ports:
-  "8080/tcp": 8080
+  "57381/tcp": 57381
 ports_description:
-  "8080/tcp": Web UI and JSON API (used by the OpenClaw plugin)
+  "57381/tcp": Web UI and JSON API (used by the OpenClaw plugin)
+# Adds an "Open Web UI" button on the add-on page linking to the server.
+# [HOST] = HAOS IP, [PORT:57381] = the host port mapped from container 57381.
+webui: "http://[HOST]:[PORT:57381]"
 options:
-  http_port: 8080
+  http_port: 57381
   nfs_enabled: true
   nfs_export: "192.168.0.20:/volume1/music"
   nfs_options: "rw,vers=4,proto=tcp,hard,timeo=600"
-  output_subdir: "offline-music-manager"
+  output_subdir: ""
   postgres_url: ""
   postgres_host: "core-postgres"
   postgres_port: 5432
@@ -46,7 +50,7 @@ schema:
   nfs_enabled: bool
   nfs_export: str?
   nfs_options: str?
-  output_subdir: str
+  output_subdir: str?
   postgres_url: str?
   postgres_host: str?
   postgres_port: port?

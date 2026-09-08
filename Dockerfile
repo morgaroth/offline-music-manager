@@ -17,14 +17,14 @@ WORKDIR /src
 # Dependency/build definition first for layer caching.
 COPY build.sbt ./
 COPY project ./project
-RUN sbt -batch -mem 2048 update || true
+RUN sbt -batch -mem 1200 update || true
 
 # Sources.
 COPY domain ./domain
 COPY http ./http
 
 # Produce an unpacked, runnable app under http/target/universal/stage.
-RUN sbt -batch -mem 2048 "http/stage"
+RUN sbt -batch -mem 1200 "http/stage"
 
 # ---- Stage 2: runtime ----
 FROM eclipse-temurin:21-jre
@@ -78,7 +78,7 @@ COPY --from=builder /src/http/target/universal/stage /opt/music-library
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod a+x /entrypoint.sh /opt/music-library/bin/musiclibraryhttp
 
-EXPOSE 8080
+EXPOSE 57381
 
 # entrypoint mounts NFS + ensures dirs, then execs the app in serve mode.
 ENTRYPOINT [ "/entrypoint.sh" ]

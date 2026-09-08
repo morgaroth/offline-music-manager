@@ -28,7 +28,7 @@ object ServerConfig:
     File(File(System.getProperty("user.home")), "music-library")
 
   def fromOptions(opts: OptionsSource): ServerConfig =
-    val port = opts.int("http_port", "MUSIC_LIBRARY_HTTP_PORT", 8080)
+    val port = opts.int("http_port", "MUSIC_LIBRARY_HTTP_PORT", 57381)
     // In the container the downloader is bundled at a known location, so this is
     // not a user-facing option. The env var stays only as an escape hatch.
     val downloader = opts.str("", "MUSIC_LIBRARY_DOWNLOADER").getOrElse("yt-dlp")
@@ -41,9 +41,12 @@ object ServerConfig:
       opts.str("", "MUSIC_LIBRARY_OUTPUT_DIR") match
         case Some(explicit) => File(explicit)
         case None =>
-          val subdir = opts.string("output_subdir", "MUSIC_LIBRARY_OUTPUT_SUBDIR", "offline-music-manager")
           if opts.bool("nfs_enabled", "MUSIC_LIBRARY_NFS_ENABLED", false) then
-            File(File(nfsMountRoot), subdir)
+            // Optional subdir under the mount. Empty/unset -> write to the mount
+            // root itself (i.e. straight into the mounted music directory).
+            opts.str("output_subdir", "MUSIC_LIBRARY_OUTPUT_SUBDIR") match
+              case Some(subdir) => File(File(nfsMountRoot), subdir)
+              case None         => File(nfsMountRoot)
           else
             File(defaultBase, "all-music")
 
