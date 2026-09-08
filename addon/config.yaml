@@ -6,6 +6,10 @@ description: >-
   Download and manage a music library, writing finished tracks to an NFS share
   (e.g. for Navidrome). Exposes an HTTP UI + JSON API for an OpenClaw agent.
 url: https://gitlab.com/mateuszjajedev/offline-music-manager
+# Pull a prebuilt image (published by CI) instead of building on HAOS.
+# {arch} is substituted per architecture (amd64 / aarch64). The tag pulled is
+# `version` above, so bump both together on release.
+image: "mateuszjaje/offline-music-manager/{arch}"
 arch:
   - amd64
   - aarch64
@@ -36,7 +40,6 @@ options:
   postgres_database: "music_library"
   postgres_user: "postgres"
   postgres_password: ""
-  downloader_exec: "yt-dlp"
 schema:
   http_port: port
   nfs_enabled: bool
@@ -49,4 +52,3 @@ schema:
   postgres_database: str?
   postgres_user: str?
   postgres_password: password?
-  downloader_exec: str

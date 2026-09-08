@@ -1,0 +1,79 @@
+stages:
+  - verify
+  - build
+
+# ---------------------------------------------------------------------------
+# verify — compile the Scala build. Runs on every push and MR.
+# ---------------------------------------------------------------------------
+verify:compile:
+  stage: verify
+  image: sbtscala/scala-sbt:eclipse-temurin-21.0.12_8_1.13.0_3.3.8
+  script:
+    - sbt -batch "http/compile"
+  cache:
+    key: sbt-cache
+    paths:
+      - ~/.sbt
+      - ~/.cache/coursier
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+.build_template:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_CERT_PATH: "/certs/client"
+    DOCKER_TLS_VERIFY: "1"
+    IMAGE: "$DOCKERHUB_USERNAME/offline-music-manager"
+    PLATFORMS: "linux/amd64,linux/arm64"
+  before_script:
+    - |
+      if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+        echo "DOCKERHUB_USERNAME and DOCKERHUB_TOKEN must be set as CI/CD variables." >&2
+        exit 1
+      fi
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker run --privileged --rm tonistiigi/binfmt --install all
+    - docker context create dind-ctx --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
+    - docker buildx create --use --name omm-builder --driver docker-container dind-ctx
+    - docker buildx inspect --bootstrap
+  script:
+    - |
+      TAGS=""
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        TAGS="$TAGS --tag $IMAGE:$CI_COMMIT_TAG"
+      fi
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        TAGS="$TAGS --tag $IMAGE:latest"
+      fi
+      if [ -z "$TAGS" ]; then
+        echo "No tags to push (not the default branch and not a tag pipeline)." >&2
+        exit 1
+      fi
+      echo "Building $PLATFORMS with tags:$TAGS"
+      docker buildx build \
+        --platform "$PLATFORMS" \
+        $TAGS \
+        --push \
+        .
+#  rules:
+#    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#    - if: $CI_COMMIT_TAG
+
+build:amd64:
+  extends: .build_template
+  variables:
+    HA_ARCH: amd64
+    DOCKER_PLATFORM: linux/amd64
+
+build:aarch64:
+  extends: .build_template
+  variables:
+    HA_ARCH: aarch64
+    DOCKER_PLATFORM: linux/arm64

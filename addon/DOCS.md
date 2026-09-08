@@ -59,7 +59,6 @@ postgres_port: 5432
 postgres_database: "music_library"
 postgres_user: "postgres"
 postgres_password: "changeme"
-downloader_exec: "yt-dlp"
 ```
 
 | Option              | Description                                                                                       |
@@ -75,7 +74,6 @@ downloader_exec: "yt-dlp"
 | `postgres_database` | Database name.                                                                                     |
 | `postgres_user`     | Database user.                                                                                     |
 | `postgres_password` | Database password.                                                                                 |
-| `downloader_exec`   | Downloader binary. `yt-dlp` is installed in the image.                                             |
 
 ### Postgres: string vs parts
 

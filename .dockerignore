@@ -1,0 +1,9 @@
+.git/
+.idea/
+.kiro/
+.bsp/
+**/target/
+openclaw-plugin/node_modules/
+openclaw-plugin/dist/
+addon/
+*.local

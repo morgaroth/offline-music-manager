@@ -23,9 +23,38 @@ import zio.http.*
   */
 object HttpApp extends ZIOAppDefault:
 
+  // Single config source: /data/options.json (HA add-on) -> env -> defaults.
+  private val opts: OptionsSource = OptionsSource.load()
+
+  /** Resolve the Postgres connection: a full url wins, else assemble from parts.
+    * Values come from options.json / env; falls back to application.conf when
+    * nothing is provided (keeps `sbt http/run` working from resources).
+    */
+  private def databaseConfig: DatabaseConfig =
+    opts.str("postgres_url", "MUSIC_LIBRARY_POSTGRES_URL") match
+      case Some(url) =>
+        DatabaseConfig(
+          url = url,
+          user = opts.string("postgres_user", "MUSIC_LIBRARY_POSTGRES_USER", "postgres"),
+          password = opts.string("postgres_password", "MUSIC_LIBRARY_POSTGRES_PASSWORD", ""),
+        )
+      case None =>
+        val host = opts.str("postgres_host", "MUSIC_LIBRARY_POSTGRES_HOST")
+        host match
+          case Some(h) =>
+            val port = opts.int("postgres_port", "MUSIC_LIBRARY_POSTGRES_PORT", 5432)
+            val db = opts.string("postgres_database", "MUSIC_LIBRARY_POSTGRES_DATABASE", "music_library")
+            DatabaseConfig(
+              url = s"jdbc:postgresql://$h:$port/$db",
+              user = opts.string("postgres_user", "MUSIC_LIBRARY_POSTGRES_USER", "postgres"),
+              password = opts.string("postgres_password", "MUSIC_LIBRARY_POSTGRES_PASSWORD", ""),
+            )
+          case None =>
+            // Nothing supplied: use application.conf (which itself honors env overrides).
+            DatabaseConfig.fromTypesafeConfig(ConfigFactory.load())
+
   private val configLayer: ZLayer[Any, Throwable, DatabaseConfig] =
-    ZLayer.fromZIO:
-      ZIO.attempt(DatabaseConfig.fromTypesafeConfig(ConfigFactory.load()))
+    ZLayer.fromZIO(ZIO.attempt(databaseConfig))
 
   private val storageLayer: ZLayer[Any, Throwable, ZioTracksStorageService] =
     configLayer >>> DataSourceLive.layer >>> TracksStoragePostgres.layer
@@ -33,7 +62,7 @@ object HttpApp extends ZIOAppDefault:
   private val fetcherLayer: ZLayer[ZioTracksStorageService, Nothing, ZIOFetcher] =
     ZIOFetcher.live
 
-  private val serverConfig: ServerConfig = ServerConfig.fromEnv
+  private val serverConfig: ServerConfig = ServerConfig.fromOptions(opts)
 
   /** Ensure the configured output/cache directories exist. On an NFS mount this
     * also surfaces permission problems early.
@@ -59,7 +88,7 @@ object HttpApp extends ZIOAppDefault:
     serveProgram.provide(
       storageLayer,
       fetcherLayer,
-      ServerConfig.live,
+      ZLayer.succeed(serverConfig),
       JobRegistry.live,
       MusicRoutes.live,
       Server.defaultWithPort(serverConfig.port),

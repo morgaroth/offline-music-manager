@@ -4,14 +4,14 @@ import zio.{ULayer, ZLayer}
 
 import java.io.File
 
-/** Runtime configuration for the HTTP server, sourced from environment
-  * variables so it can be driven by a Home Assistant add-on's options.
+/** Runtime configuration for the HTTP server + fetcher.
   *
-  *   - MUSIC_LIBRARY_HTTP_PORT   bind port (default 8080)
-  *   - MUSIC_LIBRARY_OUTPUT_DIR  where finished mp3s are written; point this at
-  *     an NTFS mount (e.g. /share/navidrome/music) to feed Navidrome directly
-  *   - MUSIC_LIBRARY_CACHE_DIR   scratch dir for downloads/conversion
-  *   - MUSIC_LIBRARY_DOWNLOADER  downloader executable (default yt-dlp)
+  * Sourced through [[OptionsSource]] so it works both as an HA add-on (values
+  * from `/data/options.json`) and standalone (`MUSIC_LIBRARY_*` env vars).
+  *
+  * When NFS is enabled, the entrypoint mounts the export at [[nfsMountRoot]] and
+  * output goes to `<mount>/<output_subdir>`; otherwise output goes to
+  * `MUSIC_LIBRARY_OUTPUT_DIR` (env) or a default under the home dir.
   */
 case class ServerConfig(
   port: Int,
@@ -21,21 +21,37 @@ case class ServerConfig(
 )
 
 object ServerConfig:
-  private def envStr(key: String): Option[String] =
-    sys.env.get(key).map(_.trim).filter(_.nonEmpty)
+  val nfsMountRoot = "/mnt/music"
 
   private def defaultBase: File =
     File(File(System.getProperty("user.home")), "music-library")
 
-  val fromEnv: ServerConfig =
-    val port = envStr("MUSIC_LIBRARY_HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080)
-    val outputDir = envStr("MUSIC_LIBRARY_OUTPUT_DIR")
-      .map(File(_))
-      .getOrElse(File(defaultBase, "all-music"))
-    val cacheDir = envStr("MUSIC_LIBRARY_CACHE_DIR")
+  def fromOptions(opts: OptionsSource): ServerConfig =
+    val port = opts.int("http_port", "MUSIC_LIBRARY_HTTP_PORT", 8080)
+    // In the container the downloader is bundled at a known location, so this is
+    // not a user-facing option. The env var stays only as an escape hatch.
+    val downloader = opts.str("", "MUSIC_LIBRARY_DOWNLOADER").getOrElse("yt-dlp")
+
+    // Output dir resolution:
+    //  - explicit env MUSIC_LIBRARY_OUTPUT_DIR wins (standalone),
+    //  - else if NFS enabled, <mount>/<output_subdir>,
+    //  - else <home>/music-library/all-music.
+    val outputDir =
+      opts.str("", "MUSIC_LIBRARY_OUTPUT_DIR") match
+        case Some(explicit) => File(explicit)
+        case None =>
+          val subdir = opts.string("output_subdir", "MUSIC_LIBRARY_OUTPUT_SUBDIR", "offline-music-manager")
+          if opts.bool("nfs_enabled", "MUSIC_LIBRARY_NFS_ENABLED", false) then
+            File(File(nfsMountRoot), subdir)
+          else
+            File(defaultBase, "all-music")
+
+    val cacheDir = opts.str("", "MUSIC_LIBRARY_CACHE_DIR")
       .map(File(_))
       .getOrElse(File(defaultBase, "cache"))
-    val downloader = envStr("MUSIC_LIBRARY_DOWNLOADER").getOrElse("yt-dlp")
+
     ServerConfig(port, outputDir, cacheDir, downloader)
+
+  val fromEnv: ServerConfig = fromOptions(OptionsSource.load())
 
   val live: ULayer[ServerConfig] = ZLayer.succeed(fromEnv)
