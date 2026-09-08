@@ -47,6 +47,7 @@ class JobRegistry(
       destinationDir = serverConfig.outputDir,
       cacheDir = serverConfig.cacheDir,
       downloaderExec = serverConfig.downloaderExec,
+      cookiesFile = serverConfig.cookiesFile,
       forceLevel = forceLevel,
       debug = debug,
     )

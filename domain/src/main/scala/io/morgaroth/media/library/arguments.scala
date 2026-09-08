@@ -14,8 +14,16 @@ case class Configuration(
   force: Boolean = false,
   forceLevel: Int = 0,
   debug: Boolean = false,
+  cookiesFile: Option[String] = None,
 ):
   def cacheLocation: File = cacheDir
+
+  /** yt-dlp cookie args: a `--cookies <file>` pair when configured, else empty
+    * (anonymous). Replaces the old hardcoded `--cookies-from-browser chrome`,
+    * which cannot work in a headless container.
+    */
+  def cookieArgs: Seq[String] =
+    cookiesFile.filter(_.nonEmpty).toSeq.flatMap(f => Seq("--cookies", f))
 
   override def toString: String =
     s"""configuration:
@@ -23,6 +31,7 @@ case class Configuration(
        |  - destinationDir = ${destinationDir.getAbsolutePath}
        |  - cacheDir = ${cacheDir.getAbsolutePath}
        |  - downloaderExec = $downloaderExec
+       |  - cookiesFile = ${cookiesFile.getOrElse("<none>")}
        |  - filterRegex = $regex
        |  - force = $force
        |  - forceLevel = $forceLevel

@@ -18,6 +18,7 @@ case class ServerConfig(
   outputDir: File,
   cacheDir: File,
   downloaderExec: String,
+  cookiesFile: Option[String],
 )
 
 object ServerConfig:
@@ -50,7 +51,11 @@ object ServerConfig:
       .map(File(_))
       .getOrElse(File(defaultBase, "cache"))
 
-    ServerConfig(port, outputDir, cacheDir, downloader)
+    // Optional yt-dlp cookies file (Netscape format). When unset, downloads run
+    // anonymously — fine for most public videos, needed for restricted ones.
+    val cookiesFile = opts.str("cookies_file", "MUSIC_LIBRARY_COOKIES_FILE")
+
+    ServerConfig(port, outputDir, cacheDir, downloader, cookiesFile)
 
   val fromEnv: ServerConfig = fromOptions(OptionsSource.load())
 

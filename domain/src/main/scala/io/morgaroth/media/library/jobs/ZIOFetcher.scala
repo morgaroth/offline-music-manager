@@ -41,7 +41,7 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
         sem <- Semaphore.make(4)
         a <- sem.withPermit(
           ZIO.logInfo(s"Downloading ${definition.info}...") *>
-            download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.debug) <*
+            download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.cookieArgs, cfg.debug) <*
             ZIO.logInfo(s"Downloaded ${definition.info}, now converting...")
         )
         (source, ytMeta) = a
@@ -100,11 +100,11 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
       Files.setAttribute(file.toPath, "creationTime", FileTime.fromMillis(created.toInstant(ZoneOffset.UTC).toEpochMilli))
       file.setLastModified(modified.toInstant(ZoneOffset.UTC).toEpochMilli)
 
-  def download(url: String, dest: File, downloaderExec: String, debug: Boolean = false)(using track: Track): Task[(File, YoutubeDLMeta)] =
+  def download(url: String, dest: File, downloaderExec: String, cookieArgs: Seq[String] = Seq.empty, debug: Boolean = false)(using track: Track): Task[(File, YoutubeDLMeta)] =
 
     def doWork(retries: Int = 5): Either[Throwable, (File, YoutubeDLMeta)] =
       val work = for
-        ytMetadata <- MetaDataFetcher.getYTMetadata(downloaderExec, url, Some("%(title)s (%(id)s) - RAW.%(ext)s"))
+        ytMetadata <- MetaDataFetcher.getYTMetadata(downloaderExec, url, Some("%(title)s (%(id)s) - RAW.%(ext)s"), cookieArgs)
         destinationPath = File(dest, ytMetadata._filename.get)
         _ <-
           if destinationPath.exists() then
@@ -112,7 +112,7 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
             Right(())
           else
             activeDownloads.incrementAndGet()
-            val args = Seq(downloaderExec, "--restrict-filenames", "--cookies-from-browser", "chrome", "-f", "bestaudio", "-o", destinationPath.toPath.toString, url)
+            val args = Seq(downloaderExec, "--restrict-filenames") ++ cookieArgs ++ Seq("-f", "bestaudio", "-o", destinationPath.toPath.toString, url)
             if debug then logger.debug("--> {}", args.mkString(" "))
             val result = try Right(args.!!) catch case e: Throwable => Left(e)
             activeDownloads.decrementAndGet()

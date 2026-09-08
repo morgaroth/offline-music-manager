@@ -10,11 +10,16 @@ object MetaDataFetcher:
 
   def getMetadata(url: String): Either[Throwable, YoutubeDLMeta] =
     val cfg = io.morgaroth.media.library.Configuration()
-    getYTMetadata(cfg.downloaderExec, url, None)
+    getYTMetadata(cfg.downloaderExec, url, None, cfg.cookieArgs)
 
-  def getYTMetadata(downloaderExec: String, url: String, format: Option[String]): Either[Throwable, YoutubeDLMeta] =
+  def getYTMetadata(
+    downloaderExec: String,
+    url: String,
+    format: Option[String],
+    cookieArgs: Seq[String] = Seq.empty,
+  ): Either[Throwable, YoutubeDLMeta] =
     Try {
-      (Seq(downloaderExec, "--cookies-from-browser", "chrome", "--print-json", "-s", url) ++ format.toSeq.flatMap(x => Seq("-o", x))).!!
+      (Seq(downloaderExec) ++ cookieArgs ++ Seq("--print-json", "-s", url) ++ format.toSeq.flatMap(x => Seq("-o", x))).!!
     }.toEither.flatMap { json =>
       decode[YoutubeDLMeta](json).left.map:
         case c: DecodingFailure => c.withMessage(json)

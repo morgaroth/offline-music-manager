@@ -40,6 +40,7 @@ options:
   postgres_database: "music_library"
   postgres_user: "postgres"
   postgres_password: ""
+  cookies_file: ""
 schema:
   http_port: port
   nfs_enabled: bool
@@ -52,3 +53,4 @@ schema:
   postgres_database: str?
   postgres_user: str?
   postgres_password: password?
+  cookies_file: str?
