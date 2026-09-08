@@ -7,7 +7,7 @@ import io.morgaroth.media.library.{Args, Configuration}
 import zio.*
 
 import java.io.File
-import java.nio.file.Files
+import java.nio.file.{Files, StandardCopyOption}
 import java.nio.file.attribute.FileTime
 import java.time.{LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,8 +45,11 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
             ZIO.logInfo(s"Downloaded ${definition.info}, now converting...")
         )
         (source, ytMeta) = a
+        _ <- ZIO.logInfo(s"[pipeline] downloaded source: ${source.getAbsolutePath} (exists=${source.exists()}); destination will be ${destination.getAbsolutePath}")
         mp3file = convertToMP3(source, cfg, definition)
+        _ <- ZIO.logInfo(s"[pipeline] converted mp3: ${mp3file.getAbsolutePath} (exists=${mp3file.exists()})")
         trimmed = strip(mp3file, definition, cfg.debug)
+        _ <- ZIO.logInfo(s"[pipeline] trimmed: ${trimmed.getAbsolutePath} (exists=${trimmed.exists()})")
         finalFile = dist(trimmed, destination)
         _ <- addTags(
           album = Option(definition.album).filter(_.nonEmpty).getOrElse("Twórczość"),
@@ -64,11 +67,12 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
 
       work.catchSome:
         case t: URLFetchError =>
-          logger.warn(s"The track needs to be updated ${t.getMessage}")
+          logger.warn(s"The track needs to be updated: ${t.getMessage}")
           ZIO.succeed(Left(t))
         case t: Throwable =>
-          logger.error(s"Error $t during handling ${definition.url}, going forward...")
-          t.printStackTrace()
+          // Log the full cause with stack trace so pipeline failures (e.g. a
+          // cross-device move) are diagnosable instead of a bare message.
+          logger.error(s"Error handling ${definition.info} (${definition.url}): ${t.getClass.getName}: ${t.getMessage}", t)
           ZIO.succeed(Left(t))
       .ensuring(ZIO.succeed(active.decrementAndGet()))
 
@@ -191,8 +195,21 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
     t1
 
   private def dist(source: File, destination: File): File =
-    destination.delete()
-    assert(source.renameTo(destination), "cannot move")
+    // The source lives in the cache dir; the destination is often on a different
+    // filesystem (e.g. an NFS mount). File.renameTo only works within one
+    // filesystem, so use Files.move and fall back to copy+delete across devices.
+    logger.info(s"[dist] moving ${source.getAbsolutePath} (${source.length} bytes, exists=${source.exists()}) -> ${destination.getAbsolutePath}")
+    Option(destination.getParentFile).foreach(_.mkdirs())
+    try
+      Files.move(source.toPath, destination.toPath, StandardCopyOption.REPLACE_EXISTING)
+    catch
+      case _: java.nio.file.AtomicMoveNotSupportedException | _: java.nio.file.FileSystemException =>
+        logger.info(s"[dist] cross-device move; copying then deleting source")
+        Files.copy(source.toPath, destination.toPath, StandardCopyOption.REPLACE_EXISTING)
+        source.delete()
+    if !destination.exists() then
+      throw RuntimeException(s"[dist] destination missing after move: ${destination.getAbsolutePath}")
+    logger.info(s"[dist] done: ${destination.getAbsolutePath} (${destination.length} bytes)")
     destination
 
   def addTags(file: File, author: String, title: String, album: String, id: String): Task[String] =

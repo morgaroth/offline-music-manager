@@ -33,7 +33,7 @@ opt() {
 NFS_ENABLED="$(opt nfs_enabled MUSIC_LIBRARY_NFS_ENABLED false)"
 NFS_EXPORT="$(opt nfs_export MUSIC_LIBRARY_NFS_EXPORT '')"
 NFS_OPTIONS="$(opt nfs_options MUSIC_LIBRARY_NFS_OPTIONS 'rw,vers=4,proto=tcp,hard,timeo=600')"
-OUTPUT_SUBDIR="$(opt output_subdir MUSIC_LIBRARY_OUTPUT_SUBDIR offline-music-manager)"
+OUTPUT_SUBDIR="$(opt output_subdir MUSIC_LIBRARY_OUTPUT_SUBDIR '')"
 MOUNT_ROOT="/mnt/music"
 
 if [ "$NFS_ENABLED" = "true" ] || [ "$NFS_ENABLED" = "1" ]; then
@@ -48,8 +48,11 @@ if [ "$NFS_ENABLED" = "true" ] || [ "$NFS_ENABLED" = "1" ]; then
     echo "[entrypoint] NFS mount failed" >&2
     exit 1
   fi
-  # The app derives <mount>/<subdir> for output when nfs_enabled; make sure it exists.
-  mkdir -p "$MOUNT_ROOT/$OUTPUT_SUBDIR"
+  # The app writes to <mount>/<subdir> (or the mount root itself if no subdir).
+  # Only a subdir needs creating; the mount root already exists.
+  if [ -n "$OUTPUT_SUBDIR" ]; then
+    mkdir -p "$MOUNT_ROOT/$OUTPUT_SUBDIR"
+  fi
 fi
 
 # Cache dir on the persistent /data volume (or a local default when not present).

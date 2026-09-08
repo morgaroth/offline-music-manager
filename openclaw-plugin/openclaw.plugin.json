@@ -28,7 +28,7 @@
       "baseUrl": {
         "type": "string",
         "description": "Base URL of the music library HTTP API",
-        "default": "http://127.0.0.1:8080"
+        "default": "http://127.0.0.1:57381"
       }
     }
   }

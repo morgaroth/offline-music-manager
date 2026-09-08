@@ -26,7 +26,7 @@ Postgres/fetcher wiring as the CLI.
 sbt "http/run"
 ```
 
-It listens on `:8080` by default. Override with an env var:
+It listens on `:57381` by default. Override with an env var:
 
 ```bash
 MUSIC_LIBRARY_HTTP_PORT=9090 sbt "http/run"
@@ -39,8 +39,8 @@ usual `MUSIC_LIBRARY_POSTGRES_URL` / `_USER` / `_PASSWORD` env vars apply.
 Quick check:
 
 ```bash
-curl -s localhost:8080/health           # -> 200 OK
-curl -s "localhost:8080/tracks?q=beatles" | jq .
+curl -s localhost:57381/health           # -> 200 OK
+curl -s "localhost:57381/tracks?q=beatles" | jq .
 ```
 
 ### Endpoints
@@ -92,7 +92,7 @@ Alternatively, point at it without installing by adding to `~/.openclaw/openclaw
     entries: {
       "music-library": {
         enabled: true,
-        config: { baseUrl: "http://127.0.0.1:8080" },
+        config: { baseUrl: "http://127.0.0.1:57381" },
       },
     },
   },
@@ -128,9 +128,9 @@ agent can call them:
 
 | Setting                    | Where                                             | Default                  |
 | -------------------------- | ------------------------------------------------- | ------------------------ |
-| API base URL               | `plugins.entries.music-library.config.baseUrl`    | `http://127.0.0.1:8080`  |
+| API base URL               | `plugins.entries.music-library.config.baseUrl`    | `http://127.0.0.1:57381` |
 | API base URL (fallback)    | `MUSIC_LIBRARY_BASE_URL` env var                  | —                        |
-| Server port                | `MUSIC_LIBRARY_HTTP_PORT` env var (Scala side)    | `8080`                   |
+| Server port                | `MUSIC_LIBRARY_HTTP_PORT` env var (Scala side)    | `57381`                  |
 
 ## Notes
 

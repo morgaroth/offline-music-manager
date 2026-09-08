@@ -7,7 +7,7 @@ network so an [OpenClaw](https://github.com/openclaw/openclaw) agent can drive i
 
 ## What it does
 
-- Serves a web UI + JSON API on a fixed port (default `8080`).
+- Serves a web UI + JSON API on a fixed port (default `57381`).
 - Mounts your NFS music share inside the add-on and writes fetched mp3s there.
 - Uses an **external** PostgreSQL database (e.g. another HA add-on).
 - The same port is the API the `openclaw-plugin` in this repo talks to.
@@ -36,19 +36,19 @@ project README.
 
 ## Network access
 
-The add-on maps host port `8080` (configurable), so it is reachable at
-`http://<HAOS-IP>:8080` from anywhere on your local network. That is the URL you
+The add-on maps host port `57381` (configurable), so it is reachable at
+`http://<HAOS-IP>:57381` from anywhere on your local network. That is the URL you
 give the OpenClaw plugin (`baseUrl`). No ingress, no reverse proxy, no domain
 needed — local network is enough.
 
 ## Configuration
 
 ```yaml
-http_port: 8080
+http_port: 57381
 nfs_enabled: true
 nfs_export: "192.168.0.20:/volume1/music"
 nfs_options: "rw,vers=4,proto=tcp,hard,timeo=600"
-output_subdir: "offline-music-manager"
+output_subdir: ""
 postgres_url: ""
 postgres_host: "core-postgres"
 postgres_port: 5432
@@ -63,7 +63,7 @@ postgres_password: "changeme"
 | `nfs_enabled`       | Mount an NFS share for output. If `false`, set `MUSIC_LIBRARY_OUTPUT_DIR` or a default under the home dir is used. |
 | `nfs_export`        | NFS export, `server:/export/path`. Required when `nfs_enabled` is true.                            |
 | `nfs_options`       | `mount -o` options for the NFS mount.                                                              |
-| `output_subdir`     | Subdirectory under the NFS mount (`/mnt/music/<output_subdir>`) where finished tracks are written. |
+| `output_subdir`     | Optional subfolder under the NFS mount. Leave empty to write directly into the mounted music dir (`/mnt/music`); set it to nest tracks in `/mnt/music/<output_subdir>`. |
 | `postgres_url`      | Full JDBC URL. If set, it overrides the host/port/database fields.                                |
 | `postgres_host`     | Postgres host (used when `postgres_url` is empty).                                                 |
 | `postgres_port`     | Postgres port.                                                                                     |
