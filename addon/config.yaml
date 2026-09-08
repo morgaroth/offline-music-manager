@@ -1,6 +1,6 @@
 ---
 name: Offline Music Library
-version: "0.2.0"
+version: "1.1.0"
 slug: music_library
 description: >-
   Download and manage a music library, writing finished tracks to an NFS share
@@ -9,7 +9,7 @@ url: https://gitlab.com/mateuszjajedev/offline-music-manager
 # Pull a prebuilt image (published by CI) instead of building on HAOS.
 # {arch} is substituted per architecture (amd64 / aarch64). The tag pulled is
 # `version` above, so bump both together on release.
-image: "mateuszjaje/offline-music-manager/{arch}"
+image: "mateuszjaje/offline-music-manager"
 arch:
   - amd64
   - aarch64
