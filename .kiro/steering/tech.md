@@ -55,7 +55,7 @@ the app is now HTTP-only, shipped as a Docker image / Home Assistant add-on.
 ## Configuration source
 
 `OptionsSource` (in the `http` module) resolves every setting with precedence:
-`/data/options.json` (HA add-on) → `MUSIC_LIBRARY_*` env (standalone) → default /
+`/data/options.json` (HA add-on) → `MEDIA_LIBRARY_*` env (standalone) → default /
 `application.conf`. The image is HA-agnostic: it only knows to read
 `/data/options.json` if present. `HttpApp` builds `DatabaseConfig` (full
 `postgres_url` or host/port/db parts) and `ServerConfig` from it.

@@ -18,7 +18,7 @@ import zio.http.*
   *       tracks, then exits. Options are parsed by `Args` (scopt).
   *
   * Postgres connection is read from application.conf, which honors the
-  * MUSIC_LIBRARY_POSTGRES_* env vars. Server/output config comes from
+  * MEDIA_LIBRARY_POSTGRES_* env vars. Server/output config comes from
   * ServerConfig (env-driven).
   */
 object HttpApp extends ZIOAppDefault:
@@ -31,23 +31,23 @@ object HttpApp extends ZIOAppDefault:
     * nothing is provided (keeps `sbt http/run` working from resources).
     */
   private def databaseConfig: DatabaseConfig =
-    opts.str("postgres_url", "MUSIC_LIBRARY_POSTGRES_URL") match
+    opts.str("postgres_url", "MEDIA_LIBRARY_POSTGRES_URL") match
       case Some(url) =>
         DatabaseConfig(
           url = url,
-          user = opts.string("postgres_user", "MUSIC_LIBRARY_POSTGRES_USER", "postgres"),
-          password = opts.string("postgres_password", "MUSIC_LIBRARY_POSTGRES_PASSWORD", ""),
+          user = opts.string("postgres_user", "MEDIA_LIBRARY_POSTGRES_USER", "postgres"),
+          password = opts.string("postgres_password", "MEDIA_LIBRARY_POSTGRES_PASSWORD", ""),
         )
       case None =>
-        val host = opts.str("postgres_host", "MUSIC_LIBRARY_POSTGRES_HOST")
+        val host = opts.str("postgres_host", "MEDIA_LIBRARY_POSTGRES_HOST")
         host match
           case Some(h) =>
-            val port = opts.int("postgres_port", "MUSIC_LIBRARY_POSTGRES_PORT", 5432)
-            val db = opts.string("postgres_database", "MUSIC_LIBRARY_POSTGRES_DATABASE", "music_library")
+            val port = opts.int("postgres_port", "MEDIA_LIBRARY_POSTGRES_PORT", 5432)
+            val db = opts.string("postgres_database", "MEDIA_LIBRARY_POSTGRES_DATABASE", "music_library")
             DatabaseConfig(
               url = s"jdbc:postgresql://$h:$port/$db",
-              user = opts.string("postgres_user", "MUSIC_LIBRARY_POSTGRES_USER", "postgres"),
-              password = opts.string("postgres_password", "MUSIC_LIBRARY_POSTGRES_PASSWORD", ""),
+              user = opts.string("postgres_user", "MEDIA_LIBRARY_POSTGRES_USER", "postgres"),
+              password = opts.string("postgres_password", "MEDIA_LIBRARY_POSTGRES_PASSWORD", ""),
             )
           case None =>
             // Nothing supplied: use application.conf (which itself honors env overrides).
@@ -70,6 +70,7 @@ object HttpApp extends ZIOAppDefault:
   private val ensureDirs: Task[Unit] =
     ZIO.attempt:
       serverConfig.outputDir.mkdirs()
+      serverConfig.videoOutputDir.mkdirs()
       serverConfig.cacheDir.mkdirs()
     .unit
 

@@ -47,9 +47,9 @@ database). Configure the connection via `http/src/main/resources/application.con
 or environment variables:
 
 ```bash
-export MUSIC_LIBRARY_POSTGRES_URL="jdbc:postgresql://localhost:5432/music_library"
-export MUSIC_LIBRARY_POSTGRES_USER="postgres"
-export MUSIC_LIBRARY_POSTGRES_PASSWORD=""
+export MEDIA_LIBRARY_POSTGRES_URL="jdbc:postgresql://localhost:5432/music_library"
+export MEDIA_LIBRARY_POSTGRES_USER="postgres"
+export MEDIA_LIBRARY_POSTGRES_PASSWORD=""
 ```
 
 ## Build & run
@@ -61,7 +61,7 @@ sbt "http/run fetch"     # CLI batch download of all ready-to-fetch tracks
 sbt "http/stage"         # produce a runnable app under http/target/universal/stage
 ```
 
-The UI and API listen on `:57381` by default (`MUSIC_LIBRARY_HTTP_PORT` to change).
+The UI and API listen on `:57381` by default (`MEDIA_LIBRARY_HTTP_PORT` to change).
 Open `http://localhost:57381`.
 
 ## Docker
@@ -72,11 +72,13 @@ build → slim JRE runtime with `ffmpeg`, `yt-dlp`, `mutagen`). Run it standalon
 ```bash
 docker build -t offline-music-manager .
 docker run --rm -p 57381:57381 \
-  -e MUSIC_LIBRARY_POSTGRES_URL="jdbc:postgresql://<host>:5432/music_library" \
-  -e MUSIC_LIBRARY_POSTGRES_USER=postgres \
-  -e MUSIC_LIBRARY_POSTGRES_PASSWORD=... \
-  -e MUSIC_LIBRARY_OUTPUT_DIR=/downloads \
-  offline-music-manager
+  -e MEDIA_LIBRARY_POSTGRES_URL="jdbc:postgresql://<host>:5432/music_library" \
+  -e MEDIA_LIBRARY_POSTGRES_USER=postgres \
+  -e MEDIA_LIBRARY_POSTGRES_PASSWORD=... \
+  -e MEDIA_LIBRARY_MUSIC_OUTPUT_PATH=/music \
+  -e MEDIA_LIBRARY_VIDEO_OUTPUT_PATH=/video \
+  -e MEDIA_LIBRARY_CACHE_PATH=/cache \
+  offline-media-manager
 ```
 
 Open `http://localhost:57381`.
@@ -85,7 +87,7 @@ Open `http://localhost:57381`.
 
 The image reads config from, in order:
 1. `/data/options.json` — supplied by the Home Assistant Supervisor (add-on).
-2. `MUSIC_LIBRARY_*` environment variables — the standalone `docker run` path.
+2. `MEDIA_LIBRARY_*` environment variables — the standalone `docker run` path.
 3. `application.conf` defaults.
 
 Nothing in the image is HA-specific; it only knows to read `/data/options.json`
@@ -111,8 +113,9 @@ running server. See `openclaw-plugin/README.md`.
 
 ## Syncing to Navidrome
 
-Finished tracks are written to `output_dir` (a mapped HA folder). Point Navidrome
-at that folder, or sync it to the Navidrome library by whatever means you use.
+Finished music is written to `music_output_path` and video to `video_output_path`
+(mapped HA folders). Point Navidrome/Jellyfin at those folders, or sync them to
+your libraries by whatever means you use.
 Direct NFS mounting from the add-on was removed and will return later with a
 different storage design; **SYNC.md** has the older NFS automount notes for
 reference.

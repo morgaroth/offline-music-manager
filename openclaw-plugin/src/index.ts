@@ -21,7 +21,7 @@ function resolveBaseUrl(api: unknown): string {
   const cfg = (api as { config?: { baseUrl?: string } } | undefined)?.config;
   return (
     cfg?.baseUrl ??
-    process.env.MUSIC_LIBRARY_BASE_URL ??
+    process.env.MEDIA_LIBRARY_BASE_URL ??
     DEFAULT_BASE_URL
   ).replace(/\/+$/, "");
 }

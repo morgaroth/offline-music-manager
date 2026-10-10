@@ -13,8 +13,9 @@ folder (e.g. under `/share`), and the API is reachable on the local network so a
 - The same port is the API the `openclaw-plugin` in this repo talks to.
 
 > Note: direct NFS mounting was removed and will return later with a different
-> storage design. For now, point `output_dir` at a mapped HA folder (`/share` or
-> `/media`); sync that folder to Navidrome by whatever means you already use.
+> storage design. For now, point `music_output_path` / `video_output_path` at
+> mapped HA folders (`/share` or `/media`); sync those to Navidrome/Jellyfin by
+> whatever means you already use.
 
 ## Requirements
 
@@ -48,7 +49,9 @@ needed — local network is enough.
 
 ```yaml
 http_port: 57381
-output_dir: "/share/offline-music-manager"
+music_output_path: "/share/offline-media-manager/music"
+video_output_path: "/share/offline-media-manager/video"
+cache_path: "/data/cache"
 postgres_url: ""
 postgres_host: "core-postgres"
 postgres_port: 5432
@@ -60,8 +63,10 @@ cookies_file: ""
 
 | Option              | Description                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
-| `http_port`         | Host port for the UI + API. Reachable as `http://<HAOS-IP>:<port>`.                                |
-| `output_dir`        | Folder where finished tracks are written. Point at a mapped HA path (`/share/...` or `/media/...`). |
+| `http_port`          | Host port for the UI + API. Reachable as `http://<HAOS-IP>:<port>`.                               |
+| `music_output_path`  | Folder where finished **music** mp3s are written (map to a Navidrome path).                        |
+| `video_output_path`  | Folder where finished **video** mp4s are written (map to a Jellyfin path).                         |
+| `cache_path`         | Scratch dir for downloads/transcoding. `/data/cache` keeps it on the add-on's persistent volume.   |
 | `postgres_url`      | Full JDBC URL. If set, it overrides the host/port/database fields.                                |
 | `postgres_host`     | Postgres host (used when `postgres_url` is empty).                                                 |
 | `postgres_port`     | Postgres port.                                                                                     |

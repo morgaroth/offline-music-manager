@@ -1,10 +1,10 @@
 ---
-name: Offline Music Library
-version: "1.3.0"
+name: Offline Media Manager
+version: "1.4.0"
 slug: music_library
 description: >-
-  Download and manage a music library. Exposes an HTTP UI + JSON API for an
-  OpenClaw agent. Writes finished tracks to a mapped HA folder.
+  Download and manage music and video. Exposes an HTTP UI + JSON API for an
+  OpenClaw agent. Writes music and video to separate mapped HA folders.
 url: https://gitlab.com/mateuszjajedev/offline-music-manager
 # Pull a prebuilt image (published by CI) instead of building on HAOS.
 # {arch} is substituted per architecture (amd64 / aarch64). The tag pulled is
@@ -29,7 +29,9 @@ ports_description:
 webui: "http://[HOST]:[PORT:57381]"
 options:
   http_port: 57381
-  output_dir: "/share/offline-music-manager"
+  music_output_path: "/share/offline-media-manager/music"
+  video_output_path: "/share/offline-media-manager/video"
+  cache_path: "/data/cache"
   postgres_url: ""
   postgres_host: "core-postgres"
   postgres_port: 5432
@@ -39,7 +41,9 @@ options:
   cookies_file: ""
 schema:
   http_port: port
-  output_dir: str
+  music_output_path: str
+  video_output_path: str
+  cache_path: str
   postgres_url: str?
   postgres_host: str?
   postgres_port: port?

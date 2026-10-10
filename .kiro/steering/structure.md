@@ -33,7 +33,7 @@ offline-music-manager/
 │       │   ├── MusicRoutes.scala     # UI + JSON API routes
 │       │   ├── WebUi.scala           # self-contained inline HTML/CSS/JS UI
 │       │   ├── JsonCodecs.scala      # circe codecs for Track/TrackStatus
-│       │   ├── OptionsSource.scala   # /data/options.json | MUSIC_LIBRARY_* env | default
+│       │   ├── OptionsSource.scala   # /data/options.json | MEDIA_LIBRARY_* env | default
 │       │   ├── ServerConfig.scala    # port/output/cache resolved via OptionsSource
 │       │   └── JobRegistry.scala     # async fetch jobs (forkDaemon + Ref status)
 │       └── storage/
@@ -68,11 +68,11 @@ offline-music-manager/
 - **Storage**: every method returns `Task[...]`. Hand-written JDBC; every query is
   logged via a `logQuery` helper.
 - **Config precedence** (`OptionsSource`): `/data/options.json` (HA add-on) →
-  `MUSIC_LIBRARY_*` env (standalone) → default / `application.conf`. `HttpApp`
+  `MEDIA_LIBRARY_*` env (standalone) → default / `application.conf`. `HttpApp`
   builds `DatabaseConfig` (full `postgres_url` or host/port/db parts) and
   `ServerConfig` (`http_port`, `output_subdir` under `/mnt/music` when
-  `nfs_enabled`, else `MUSIC_LIBRARY_OUTPUT_DIR`). The bundled downloader is
-  `yt-dlp` (not a user option; `MUSIC_LIBRARY_DOWNLOADER` env is an escape hatch).
+  `nfs_enabled`, else `MEDIA_LIBRARY_OUTPUT_DIR`). The bundled downloader is
+  `yt-dlp` (not a user option; `MEDIA_LIBRARY_DOWNLOADER` env is an escape hatch).
 
 ## Database
 

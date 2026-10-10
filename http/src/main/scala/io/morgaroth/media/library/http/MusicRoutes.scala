@@ -3,7 +3,7 @@ package io.morgaroth.media.library.http
 import io.circe.syntax.*
 import io.circe.{Json, parser}
 import io.morgaroth.media.library.http.JsonCodecs.given
-import io.morgaroth.media.library.storage.{Track, TrackStatus, ZioTracksStorageService}
+import io.morgaroth.media.library.storage.{MediaType as TrackMediaType, Track, TrackStatus, ZioTracksStorageService}
 import zio.*
 import zio.http.*
 
@@ -83,6 +83,13 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
         storage.getById(id).map(trackResponse).orElseFail(Response.notFound(s"track $id"))
       },
 
+      // Hard-delete a track.
+      Method.DELETE / "tracks" / uuid("id") -> handler { (id: UUID, _: Request) =>
+        storage.delete(id)
+          .as(Response.status(Status.NoContent))
+          .orElseFail(Response.notFound(s"track $id"))
+      },
+
       // Create a track from a URL. Body: { "url": "..." }.
       Method.POST / "tracks" -> handler { (req: Request) =>
         (for
@@ -111,6 +118,16 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
           status <- ZIO.fromOption(TrackStatus.byDbRepr.get(raw.toLowerCase))
             .orElseFail(IllegalArgumentException(s"unknown status '$raw'"))
           track <- storage.updateStatus(id, status)
+        yield trackResponse(track))
+          .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
+      },
+      // Media type: music | video.
+      Method.PATCH / "tracks" / uuid("id") / "type" -> handler { (id: UUID, req: Request) =>
+        (for
+          raw <- stringField(req, "type")
+          mt <- ZIO.fromOption(TrackMediaType.byDbRepr.get(raw.toLowerCase))
+            .orElseFail(IllegalArgumentException(s"unknown media type '$raw'"))
+          track <- storage.updateMediaType(id, mt)
         yield trackResponse(track))
           .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
       },

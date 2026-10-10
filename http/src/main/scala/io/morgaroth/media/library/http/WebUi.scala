@@ -15,7 +15,7 @@ object WebUi:
       |<head>
       |  <meta charset="utf-8" />
       |  <meta name="viewport" content="width=device-width, initial-scale=1" />
-      |  <title>Music Library</title>
+      |  <title>Offline Media Manager</title>
       |  <style>
       |    :root { color-scheme: light dark; }
       |    * { box-sizing: border-box; }
@@ -33,6 +33,7 @@ object WebUi:
       |           border: 1px solid #8884; background: transparent; color: inherit; }
       |    button { cursor: pointer; }
       |    button.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+      |    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
       |    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
       |    th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8883; vertical-align: top; }
       |    th { position: sticky; top: 0; background: Canvas; }
@@ -50,7 +51,7 @@ object WebUi:
       |  </style>
       |</head>
       |<body>
-      |  <h1>🎵 Music Library</h1>
+      |  <h1>🎬 Offline Media Manager</h1>
       |  <div class="tabs">
       |    <button class="tab active" data-tab="search" onclick="showTab('search')">Search</button>
       |    <button class="tab" data-tab="edit" onclick="showTab('edit')">Edit</button>
@@ -72,7 +73,7 @@ object WebUi:
       |      <button onclick="addTrack()">Add</button>
       |    </div>
       |    <table>
-      |      <thead><tr><th>Title</th><th>Artist</th><th>Album</th><th>Status</th><th></th></tr></thead>
+      |      <thead><tr><th>Title</th><th>Artist</th><th>Album</th><th>Type</th><th>Status</th><th></th></tr></thead>
       |      <tbody id="rows"></tbody>
       |    </table>
       |  </div>
@@ -87,6 +88,11 @@ object WebUi:
       |        <label>Title</label><input id="f-title" />
       |        <label>Artist</label><input id="f-artist" />
       |        <label>Album</label><input id="f-album" />
+      |        <label>Type</label>
+      |        <select id="f-type">
+      |          <option value="music">music</option>
+      |          <option value="video">video</option>
+      |        </select>
       |        <label>Status</label>
       |        <select id="f-status">
       |          <option value="draft">draft</option>
@@ -104,6 +110,7 @@ object WebUi:
       |        <button class="primary" onclick="saveAll()">Save all</button>
       |        <button onclick="doFetch()">Fetch now</button>
       |        <button onclick="reloadCurrent()">Reload</button>
+      |        <button class="danger" onclick="deleteTrack()">Delete</button>
       |      </div>
       |    </div>
       |  </div>
@@ -143,6 +150,7 @@ object WebUi:
       |        const tr = document.createElement('tr');
       |        tr.innerHTML =
       |          '<td>' + esc(t.title) + '</td><td>' + esc(t.artist) + '</td><td>' + esc(t.album) + '</td>' +
+      |          '<td>' + (t.type === 'video' ? '🎬' : '🎵') + ' ' + esc(t.type) + '</td>' +
       |          '<td><span class="status">' + esc(t.status) + '</span></td>' +
       |          '<td><a>edit</a></td>';
       |        tr.querySelector('a').onclick = () => openEditor(t);
@@ -174,6 +182,7 @@ object WebUi:
       |      document.getElementById('f-title').value = t.title || '';
       |      document.getElementById('f-artist').value = t.artist || '';
       |      document.getElementById('f-album').value = t.album || '';
+      |      document.getElementById('f-type').value = t.type || 'music';
       |      document.getElementById('f-status').value = t.status || 'draft';
       |      document.getElementById('f-startAt').value = t.startAt || '';
       |      document.getElementById('f-endAt').value = t.endAt || '';
@@ -212,10 +221,28 @@ object WebUi:
       |        await patch('volume-change', { volumeChange: val('f-volumeChange') });
       |        const playlists = val('f-playlists').split(',').map(s => s.trim()).filter(s => s);
       |        await patch('playlists', { playlists });
+      |        await patch('type', { type: val('f-type') });
       |        const updated = await patch('status', { status: val('f-status') });
       |        current = updated;
       |        msg('Saved.', 'ok');
       |      } catch (e) { msg('Save failed: ' + e, 'err'); }
+      |    }
+      |
+      |    async function deleteTrack() {
+      |      if (!current) return;
+      |      const label = (current.artist || current.title) ? (current.artist + ' - ' + current.title) : current.id;
+      |      if (!confirm('Permanently delete this track?\n\n' + label)) return;
+      |      msg('Deleting...');
+      |      try {
+      |        const res = await fetch('/tracks/' + current.id, { method: 'DELETE' });
+      |        if (!res.ok && res.status !== 204) throw new Error(await res.text());
+      |        current = null;
+      |        document.getElementById('editForm').style.display = 'none';
+      |        document.getElementById('editEmpty').style.display = 'block';
+      |        msg('Deleted.', 'ok');
+      |        showTab('search');
+      |        search();
+      |      } catch (e) { msg('Delete failed: ' + e, 'err'); }
       |    }
       |
       |    async function doFetch() {

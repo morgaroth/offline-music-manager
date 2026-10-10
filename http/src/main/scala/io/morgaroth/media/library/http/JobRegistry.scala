@@ -45,6 +45,7 @@ class JobRegistry(
     Configuration(
       action = "fetch",
       destinationDir = serverConfig.outputDir,
+      videoDestinationDir = serverConfig.videoOutputDir,
       cacheDir = serverConfig.cacheDir,
       downloaderExec = serverConfig.downloaderExec,
       cookiesFile = serverConfig.cookiesFile,

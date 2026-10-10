@@ -27,6 +27,7 @@ case class Track(
   updatedAt: ZonedDateTime = ZonedDateTime.now(),
   createdAt: ZonedDateTime = ZonedDateTime.now(),
   _id: UUID = UUID.randomUUID(),
+  mediaType: MediaType = MediaType.Music,
 ):
   lazy val searchUrl: String =
     s"https://www.youtube.com/results?search_query=${URLEncoder.encode(s"$title $artist", "utf-8")}"

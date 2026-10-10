@@ -8,6 +8,7 @@ import scala.util.Try
 case class Configuration(
   action: String = "undefined",
   destinationDir: File = File(File(File(System.getProperty("user.home")), "music-library"), "all-music"),
+  videoDestinationDir: File = File(File(File(System.getProperty("user.home")), "music-library"), "videos"),
   cacheDir: File = File(File(File(System.getProperty("user.home")), "music-library"), "cache"),
   downloaderExec: String = "yt-dlp",
   regex: String = ".*",

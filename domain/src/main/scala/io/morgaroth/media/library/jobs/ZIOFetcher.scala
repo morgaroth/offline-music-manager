@@ -2,7 +2,7 @@ package io.morgaroth.media.library.jobs
 
 import com.typesafe.scalalogging.LazyLogging
 import io.morgaroth.media.library.common.given_Ordering_ZonedDateTime
-import io.morgaroth.media.library.storage.{Track, ZioTracksStorageService}
+import io.morgaroth.media.library.storage.{MediaType, Track, ZioTracksStorageService}
 import io.morgaroth.media.library.{Args, Configuration}
 import zio.*
 
@@ -29,7 +29,13 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
   private val activeDownloads = AtomicInteger()
   private val id = AtomicInteger()
 
+  /** Dispatch on media type: music -> mp3 extraction; video -> H.264/AAC mp4. */
   def handleUrl(cfg: Configuration)(using definition: Track): Task[Either[Throwable, Unit]] =
+    definition.mediaType match
+      case MediaType.Video => handleVideo(cfg)
+      case MediaType.Music => handleMusic(cfg)
+
+  private def handleMusic(cfg: Configuration)(using definition: Track): Task[Either[Throwable, Unit]] =
     val versionId = definition.UFID + algorithmVersion
     val destination = File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
     if destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId) then
@@ -75,6 +81,99 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
           logger.error(s"Error handling ${definition.info} (${definition.url}): ${t.getClass.getName}: ${t.getMessage}", t)
           ZIO.succeed(Left(t))
       .ensuring(ZIO.succeed(active.decrementAndGet()))
+
+  // ---- Video pipeline -------------------------------------------------------
+
+  /** Fetch a video and transcode to H.264 (High) + AAC in MP4 — the broadly
+    * compatible target that both Jellyfin and older webOS TVs can play. Grabs
+    * the best available source quality, then re-encodes. Output goes to the
+    * separate video destination dir (Jellyfin's mount).
+    */
+  private def handleVideo(cfg: Configuration)(using definition: Track): Task[Either[Throwable, Unit]] =
+    val safeName = sanitizeFileName(s"${definition.title} - ${definition.artist}".trim.stripSuffix("-").trim)
+    val destination = File(cfg.videoDestinationDir, s"$safeName.mp4")
+    if destination.exists() && cfg.forceLevel < 1 then
+      logger.info("Video {} already present", definition.info)
+      ZIO.succeed(Right(()))
+    else
+      val work = for
+        _ <- ZIO.attempt(active.incrementAndGet())
+        _ <- ZIO.attempt(cfg.videoDestinationDir.mkdirs())
+        source <- ZIO.logInfo(s"Downloading video ${definition.info}...") *>
+          downloadVideo(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.cookieArgs, cfg.debug)
+        _ <- ZIO.logInfo(s"[pipeline] downloaded video source: ${source.getAbsolutePath} (exists=${source.exists()}); destination ${destination.getAbsolutePath}")
+        transcoded <- ZIO.attemptBlocking(transcodeToH264(source, cfg, definition))
+        _ <- ZIO.logInfo(s"[pipeline] transcoded: ${transcoded.getAbsolutePath} (exists=${transcoded.exists()})")
+        finalFile = dist(transcoded, destination)
+        _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
+        _ <- ZIO.attempt(source.delete())
+        _ <- ZIO.logInfo(s"Video ${definition.info} ready")
+      yield Right(())
+
+      work.catchSome:
+        case t: URLFetchError =>
+          logger.warn(s"The video needs to be updated: ${t.getMessage}")
+          ZIO.succeed(Left(t))
+        case t: Throwable =>
+          logger.error(s"Error handling video ${definition.info} (${definition.url}): ${t.getClass.getName}: ${t.getMessage}", t)
+          ZIO.succeed(Left(t))
+      .ensuring(ZIO.succeed(active.decrementAndGet()))
+
+  /** Download best video+audio, merged to a single mp4 by yt-dlp. */
+  private def downloadVideo(url: String, dest: File, downloaderExec: String, cookieArgs: Seq[String], debug: Boolean)(using track: Track): Task[File] =
+    ZIO.fromEither:
+      def doWork(retries: Int = 3): Either[Throwable, File] =
+        val outTemplate = File(dest, "%(title)s (%(id)s) - VIDEO.%(ext)s").toPath.toString
+        val args = Seq(downloaderExec) ++ cookieArgs ++ Seq(
+          "--restrict-filenames",
+          // Cap at 1080p (no 4K/UHD) — best quality up to Full HD, broadly
+          // playable on older webOS and Jellyfin direct-play.
+          "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+          "--merge-output-format", "mp4",
+          "--print", "after_move:filepath",
+          "--no-simulate",
+          "-o", outTemplate,
+          url,
+        )
+        if debug then logger.debug("--> {}", args.mkString(" "))
+        activeDownloads.incrementAndGet()
+        val result =
+          try
+            val printed = args.!!.trim.linesIterator.toList.lastOption.getOrElse("")
+            val f = File(printed)
+            if printed.nonEmpty && f.exists() then Right(f)
+            else Left(RuntimeException(s"yt-dlp did not report an output file (got '$printed')"))
+          catch case e: Throwable => Left(e)
+        activeDownloads.decrementAndGet()
+        result match
+          case Left(_) if retries > 0 =>
+            logger.warn(s"error downloading video $url, retrying")
+            doWork(retries - 1)
+          case Left(t) =>
+            Left(URLFetchError(track.title, track.artist, track.album, track.searchUrl))
+          case right => right
+      doWork()
+
+  /** Transcode to H.264 High + AAC in MP4, honoring optional start/end trim.
+    * CRF 18 ~ visually lossless; `-movflags +faststart` for streaming.
+    */
+  private def transcodeToH264(source: File, config: Configuration, track: Track): File =
+    val target = File(source.getParentFile, sanitizeFileName(s"${track.title} - ${track.artist}") + " - H264.mp4")
+    target.delete()
+    val (startOpt, endOpt) = fixDuration(track.startAt, track.endAt)
+    val trimIn = startOpt.toList.flatMap(v => List("-ss", v))
+    val trimOut = endOpt.toList.flatMap(v => List("-to", v))
+    val encodeArgs = Seq(
+      "-c:v", "libx264", "-profile:v", "high", "-level", "4.0",
+      "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-b:a", "192k",
+      "-movflags", "+faststart",
+    )
+    ffmpeg(trimIn*)(source)((encodeArgs ++ trimOut)*)(target)(quiet = true, debug = config.debug)
+    target
+
+  private def sanitizeFileName(s: String): String =
+    s.replaceAll("""[/\\:*?"<>|]""", "_").trim
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration): Task[Unit] =
     ZIO.attempt(cfg.destinationDir.mkdirs()) *>

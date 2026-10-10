@@ -45,6 +45,7 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
       updatedAt = rs.getTimestamp("updated_at").toInstant.atZone(ZoneOffset.UTC),
       createdAt = rs.getTimestamp("created_at").toInstant.atZone(ZoneOffset.UTC),
       _id = UUID.fromString(rs.getString("id")),
+      mediaType = MediaType.byDbRepr.getOrElse(rs.getString("type"), MediaType.Music),
     )
 
   override def getById(id: UUID): Task[Track] = withConnection: conn =>
@@ -58,8 +59,8 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
 
   override def save(document: Track): Task[Unit] = withConnection: conn =>
     val sql = """INSERT INTO tracks (id, url, title, artist, album, start_at, end_at, fade_out_seconds,
-      |  volume_change, status, id_check, playlists, raw_title, raw_description, created_at, updated_at)
-      |VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
+      |  volume_change, status, id_check, playlists, raw_title, raw_description, created_at, updated_at, type)
+      |VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
     logQuery(sql, Seq(document._id, document.url, document.title, document.artist))
     val ps = conn.prepareStatement(sql)
     ps.setObject(1, document._id)
@@ -82,11 +83,20 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
     ps.setString(14, document.rawDescription)
     ps.setTimestamp(15, Timestamp.from(document.createdAt.toInstant))
     ps.setTimestamp(16, Timestamp.from(document.updatedAt.toInstant))
+    ps.setString(17, document.mediaType.dbRepr)
     ps.executeUpdate()
 
   override def store(url: String): Task[Track] =
     val track = Track(url)
     save(track) *> getById(track._id)
+
+  override def delete(id: UUID): Task[Unit] = withConnection: conn =>
+    val sql = "DELETE FROM tracks WHERE id = ?"
+    logQuery(sql, Seq(id))
+    val ps = conn.prepareStatement(sql)
+    ps.setObject(1, id)
+    val deleted = ps.executeUpdate()
+    if deleted == 0 then throw TrackNotFound(s"by id $id")
 
   private def updateField(id: UUID, sql: String, setter: PreparedStatement => Unit): Task[Track] =
     withConnection: conn =>
@@ -160,6 +170,9 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
 
   override def updateStatus(id: UUID, status: TrackStatus): Task[Track] =
     updateSimpleString(id, "status", status.dbRepr)
+
+  override def updateMediaType(id: UUID, mediaType: MediaType): Task[Track] =
+    updateSimpleString(id, "type", mediaType.dbRepr)
 
   override def updateFadeOutSeconds(id: UUID, newData: Option[Int]): Task[Track] =
     updateField(id, "UPDATE tracks SET fade_out_seconds = ?, updated_at = ? WHERE id = ?", ps =>

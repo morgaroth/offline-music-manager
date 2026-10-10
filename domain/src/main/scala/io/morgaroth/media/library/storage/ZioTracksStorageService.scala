@@ -8,6 +8,8 @@ trait ZioTracksStorageService:
   def getById(id: UUID): Task[Track]
   def save(document: Track): Task[Unit]
   def store(url: String): Task[Track]
+  /** Hard-delete a track row. Fails with TrackNotFound if no row matched. */
+  def delete(id: UUID): Task[Unit]
   def updateArtist(id: UUID, artist: String): Task[Track]
   def updateTitle(id: UUID, title: String): Task[Track]
   def updateAlbum(id: UUID, album: String): Task[Track]
@@ -15,6 +17,7 @@ trait ZioTracksStorageService:
   def updateEndAt(id: UUID, data: Option[String]): Task[Track]
   def updateUrl(id: UUID, url: String): Task[Track]
   def updateStatus(id: UUID, status: TrackStatus): Task[Track]
+  def updateMediaType(id: UUID, mediaType: MediaType): Task[Track]
   def updateFadeOutSeconds(id: UUID, newData: Option[Int]): Task[Track]
   def updateVolumeChange(id: UUID, newData: Option[BigDecimal]): Task[Track]
   def updatePlaylists(id: UUID, newData: Set[String]): Task[Track]

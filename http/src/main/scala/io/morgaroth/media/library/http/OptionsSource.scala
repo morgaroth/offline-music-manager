@@ -12,11 +12,11 @@ import scala.util.Try
   * Precedence for every key:
   *   1. `/data/options.json` — written by the Home Assistant Supervisor from the
   *      add-on's options schema (present only when run as an add-on).
-  *   2. `MUSIC_LIBRARY_*` environment variable — the standalone `docker run` path.
+  *   2. `MEDIA_LIBRARY_*` environment variable — the standalone `docker run` path.
   *   3. built-in default.
   *
   * Nothing here is HA-specific beyond knowing the file path; a plain
-  * `docker run -e MUSIC_LIBRARY_...` works without the file, and the add-on works
+  * `docker run -e MEDIA_LIBRARY_...` works without the file, and the add-on works
   * without any env wiring.
   */
 final class OptionsSource(private val options: Map[String, Json]):

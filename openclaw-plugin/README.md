@@ -29,12 +29,12 @@ sbt "http/run"
 It listens on `:57381` by default. Override with an env var:
 
 ```bash
-MUSIC_LIBRARY_HTTP_PORT=9090 sbt "http/run"
+MEDIA_LIBRARY_HTTP_PORT=9090 sbt "http/run"
 ```
 
 Database connection settings are read from the existing
 `main/src/main/resources/application.conf` (`music-library.postgres.*`), so the
-usual `MUSIC_LIBRARY_POSTGRES_URL` / `_USER` / `_PASSWORD` env vars apply.
+usual `MEDIA_LIBRARY_POSTGRES_URL` / `_USER` / `_PASSWORD` env vars apply.
 
 Quick check:
 
@@ -129,8 +129,8 @@ agent can call them:
 | Setting                    | Where                                             | Default                  |
 | -------------------------- | ------------------------------------------------- | ------------------------ |
 | API base URL               | `plugins.entries.music-library.config.baseUrl`    | `http://127.0.0.1:57381` |
-| API base URL (fallback)    | `MUSIC_LIBRARY_BASE_URL` env var                  | —                        |
-| Server port                | `MUSIC_LIBRARY_HTTP_PORT` env var (Scala side)    | `57381`                  |
+| API base URL (fallback)    | `MEDIA_LIBRARY_BASE_URL` env var                  | —                        |
+| Server port                | `MEDIA_LIBRARY_HTTP_PORT` env var (Scala side)    | `57381`                  |
 
 ## Notes
 

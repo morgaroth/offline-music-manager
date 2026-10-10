@@ -2,7 +2,7 @@ package io.morgaroth.media.library.http
 
 import io.circe.*
 import io.circe.syntax.*
-import io.morgaroth.media.library.storage.{Track, TrackStatus}
+import io.morgaroth.media.library.storage.{MediaType, Track, TrackStatus}
 
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -33,6 +33,10 @@ object JsonCodecs:
   given Decoder[TrackStatus] = Decoder.decodeString.emap: s =>
     TrackStatus.byDbRepr.get(s.toLowerCase).toRight(s"unknown status '$s'")
 
+  given Encoder[MediaType] = Encoder.encodeString.contramap(_.dbRepr)
+  given Decoder[MediaType] = Decoder.decodeString.emap: s =>
+    MediaType.byDbRepr.get(s.toLowerCase).toRight(s"unknown media type '$s'")
+
   given Encoder[Track] = (t: Track) =>
     Json.obj(
       "id" -> t._id.asJson,
@@ -45,6 +49,7 @@ object JsonCodecs:
       "fadeOutSeconds" -> t.fadeOutSeconds.asJson,
       "volumeChange" -> t.volumeChange.asJson,
       "status" -> t.status.asJson,
+      "type" -> t.mediaType.asJson,
       "idCheck" -> t.idCheck.asJson,
       "playlists" -> t.playlists.asJson,
       "rawTitle" -> t.rawTitle.asJson,
