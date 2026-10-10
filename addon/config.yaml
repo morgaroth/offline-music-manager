@@ -1,10 +1,10 @@
 ---
 name: Offline Music Library
-version: "1.2.1"
+version: "1.3.0"
 slug: music_library
 description: >-
-  Download and manage a music library, writing finished tracks to an NFS share
-  (e.g. for Navidrome). Exposes an HTTP UI + JSON API for an OpenClaw agent.
+  Download and manage a music library. Exposes an HTTP UI + JSON API for an
+  OpenClaw agent. Writes finished tracks to a mapped HA folder.
 url: https://gitlab.com/mateuszjajedev/offline-music-manager
 # Pull a prebuilt image (published by CI) instead of building on HAOS.
 # {arch} is substituted per architecture (amd64 / aarch64). The tag pulled is
@@ -14,12 +14,7 @@ arch:
   - amd64
   - aarch64
 init: false
-# NFS mounting inside the container requires elevated privileges.
-privileged:
-  - SYS_ADMIN
-  - DAC_READ_SEARCH
-apparmor: false
-# Map HA storage too, so the output dir can alternatively point at /share or /media.
+# Map HA storage so the output dir can point at /share or /media.
 map:
   - share:rw
   - media:rw
@@ -34,10 +29,7 @@ ports_description:
 webui: "http://[HOST]:[PORT:57381]"
 options:
   http_port: 57381
-  nfs_enabled: true
-  nfs_export: "192.168.0.20:/volume1/music"
-  nfs_options: "rw,vers=4,proto=tcp,hard,timeo=600"
-  output_subdir: ""
+  output_dir: "/share/offline-music-manager"
   postgres_url: ""
   postgres_host: "core-postgres"
   postgres_port: 5432
@@ -47,10 +39,7 @@ options:
   cookies_file: ""
 schema:
   http_port: port
-  nfs_enabled: bool
-  nfs_export: str?
-  nfs_options: str?
-  output_subdir: str?
+  output_dir: str
   postgres_url: str?
   postgres_host: str?
   postgres_port: port?

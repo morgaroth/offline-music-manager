@@ -120,6 +120,41 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
       Method.PATCH / "tracks" / uuid("id") / "end-at" -> handler { (id: UUID, req: Request) =>
         updateOptional(req, "endAt")(v => storage.updateEndAt(id, v))
       },
+      // Fade-out seconds: integer, or empty/absent to clear.
+      Method.PATCH / "tracks" / uuid("id") / "fade-out-seconds" -> handler { (id: UUID, req: Request) =>
+        (for
+          raw <- optStringField(req, "fadeOutSeconds")
+          parsed <- raw match
+            case None => ZIO.succeed(None)
+            case Some(s) => ZIO.fromOption(s.toIntOption).map(Some(_))
+              .orElseFail(IllegalArgumentException(s"invalid integer '$s'"))
+          track <- storage.updateFadeOutSeconds(id, parsed)
+        yield trackResponse(track))
+          .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
+      },
+      // Volume change (dB): decimal, or empty/absent to clear.
+      Method.PATCH / "tracks" / uuid("id") / "volume-change" -> handler { (id: UUID, req: Request) =>
+        (for
+          raw <- optStringField(req, "volumeChange")
+          parsed <- raw match
+            case None => ZIO.succeed(None)
+            case Some(s) => ZIO.attempt(Some(BigDecimal(s)))
+              .orElseFail(IllegalArgumentException(s"invalid number '$s'"))
+          track <- storage.updateVolumeChange(id, parsed)
+        yield trackResponse(track))
+          .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
+      },
+      // Playlists: JSON array of names, e.g. { "playlists": ["a","b"] }.
+      Method.PATCH / "tracks" / uuid("id") / "playlists" -> handler { (id: UUID, req: Request) =>
+        (for
+          raw <- req.body.asString
+          js <- ZIO.fromEither(parser.parse(raw))
+          names <- ZIO.fromOption(js.hcursor.get[Set[String]]("playlists").toOption)
+            .orElseFail(IllegalArgumentException("missing array field 'playlists'"))
+          track <- storage.updatePlaylists(id, names.filter(_.nonEmpty))
+        yield trackResponse(track))
+          .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
+      },
 
       // Playlists: map of playlist name -> tracks.
       Method.GET / "playlists" -> handler { (_: Request) =>

@@ -9,9 +9,9 @@ import java.io.File
   * Sourced through [[OptionsSource]] so it works both as an HA add-on (values
   * from `/data/options.json`) and standalone (`MUSIC_LIBRARY_*` env vars).
   *
-  * When NFS is enabled, the entrypoint mounts the export at [[nfsMountRoot]] and
-  * output goes to `<mount>/<output_subdir>`; otherwise output goes to
-  * `MUSIC_LIBRARY_OUTPUT_DIR` (env) or a default under the home dir.
+  * Output goes to the `output_dir` option / `MUSIC_LIBRARY_OUTPUT_DIR` env, or a
+  * default under the home dir. (NFS mounting was removed; a new storage design
+  * will replace it later.)
   */
 case class ServerConfig(
   port: Int,
@@ -22,8 +22,6 @@ case class ServerConfig(
 )
 
 object ServerConfig:
-  val nfsMountRoot = "/mnt/music"
-
   private def defaultBase: File =
     File(File(System.getProperty("user.home")), "music-library")
 
@@ -33,22 +31,10 @@ object ServerConfig:
     // not a user-facing option. The env var stays only as an escape hatch.
     val downloader = opts.str("", "MUSIC_LIBRARY_DOWNLOADER").getOrElse("yt-dlp")
 
-    // Output dir resolution:
-    //  - explicit env MUSIC_LIBRARY_OUTPUT_DIR wins (standalone),
-    //  - else if NFS enabled, <mount>/<output_subdir>,
-    //  - else <home>/music-library/all-music.
-    val outputDir =
-      opts.str("", "MUSIC_LIBRARY_OUTPUT_DIR") match
-        case Some(explicit) => File(explicit)
-        case None =>
-          if opts.bool("nfs_enabled", "MUSIC_LIBRARY_NFS_ENABLED", false) then
-            // Optional subdir under the mount. Empty/unset -> write to the mount
-            // root itself (i.e. straight into the mounted music directory).
-            opts.str("output_subdir", "MUSIC_LIBRARY_OUTPUT_SUBDIR") match
-              case Some(subdir) => File(File(nfsMountRoot), subdir)
-              case None         => File(nfsMountRoot)
-          else
-            File(defaultBase, "all-music")
+    // Output dir: `output_dir` option / MUSIC_LIBRARY_OUTPUT_DIR env, else default.
+    val outputDir = opts.str("output_dir", "MUSIC_LIBRARY_OUTPUT_DIR")
+      .map(File(_))
+      .getOrElse(File(defaultBase, "all-music"))
 
     val cacheDir = opts.str("", "MUSIC_LIBRARY_CACHE_DIR")
       .map(File(_))

@@ -79,10 +79,16 @@ object HttpApp extends ZIOAppDefault:
     for
       routes <- ZIO.service[MusicRoutes]
       _ <- ensureDirs
-      _ <- ZIO.logInfo(s"Music library HTTP API + UI listening on :${serverConfig.port}")
+      _ <- ZIO.logInfo(s"Music library HTTP API + UI listening on 0.0.0.0:${serverConfig.port}")
       _ <- ZIO.logInfo(s"Fetch output dir: ${serverConfig.outputDir.getAbsolutePath}")
       _ <- Server.serve(routes.routes)
     yield ()
+
+  // Bind to 0.0.0.0 (all interfaces), not the zio-http default of localhost.
+  // In a container, localhost is only reachable from inside the container, so
+  // the HAOS host hitting IP:PORT would get no response.
+  private val serverLayer: ZLayer[Any, Throwable, Server] =
+    ZLayer.succeed(Server.Config.default.binding("0.0.0.0", serverConfig.port)) >>> Server.live
 
   private val serve: ZIO[Any, Throwable, Unit] =
     serveProgram.provide(
@@ -91,7 +97,7 @@ object HttpApp extends ZIOAppDefault:
       ZLayer.succeed(serverConfig),
       JobRegistry.live,
       MusicRoutes.live,
-      Server.defaultWithPort(serverConfig.port),
+      serverLayer,
     )
 
   // --- fetch mode -----------------------------------------------------------

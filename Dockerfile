@@ -31,18 +31,14 @@ FROM eclipse-temurin:21-jre
 
 # Runtime deps:
 #  - ffmpeg        : audio conversion
-#  - nfs-common    : mount the NFS music share (mount.nfs)
 #  - python3-mutagen : provides the mid3v2 CLI for ID3 tagging
 #  - jq            : entrypoint reads /data/options.json
 #  - ca-certificates, curl : fetch the yt-dlp standalone binary
 #  - deno            : JS runtime required by yt-dlp-ejs for full YouTube support
 #  - yt-dlp-ejs      : YouTube signature/challenge scripts (installed via pip)
-# Bump/override CACHE_BUST (e.g. --build-arg CACHE_BUST=$(date +%s)) to force this
-# layer to re-run and pull the current latest yt-dlp + deno without a full --no-cache.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
-        nfs-common \
         python3-mutagen \
         python3-pip \
         jq \
@@ -80,6 +76,6 @@ RUN chmod a+x /entrypoint.sh /opt/music-library/bin/musiclibraryhttp
 
 EXPOSE 57381
 
-# entrypoint mounts NFS + ensures dirs, then execs the app in serve mode.
+# entrypoint pins the cache dir to /data, then execs the app in serve mode.
 ENTRYPOINT [ "/entrypoint.sh" ]
 CMD [ "/opt/music-library/bin/musiclibraryhttp", "serve" ]

@@ -8,8 +8,8 @@ It runs as a single HTTP service that serves a web UI and a JSON API, with a
 yt-dlp/ffmpeg executor behind it. It ships two ways:
 
 - a plain **Docker image** (bind a port, open the UI from `localhost`), and
-- a **Home Assistant add-on** (the same container, wrapped with HA config + an NFS
-  mount for the Navidrome music volume).
+- a **Home Assistant add-on** (the same container, wrapped with HA config; output
+  goes to a mapped HA folder).
 
 An **OpenClaw plugin** exposes the API as agent tools, so you can manage songs by
 sharing a link with an OpenClaw agent.
@@ -67,8 +67,7 @@ Open `http://localhost:57381`.
 ## Docker
 
 The root `Dockerfile` builds a self-contained, HA-agnostic image (multi-stage: sbt
-build → slim JRE runtime with `ffmpeg`, `yt-dlp`, `nfs-common`, `mutagen`). Run it
-standalone:
+build → slim JRE runtime with `ffmpeg`, `yt-dlp`, `mutagen`). Run it standalone:
 
 ```bash
 docker build -t offline-music-manager .
@@ -103,8 +102,7 @@ single-arch images, not a multi-arch manifest.
 
 The add-on (`addon/`) **pulls** the CI-built image (`image:`/`version:` in
 `config.yaml`) — HAOS builds nothing. It presents a native options UI (Postgres,
-NFS export, port) and mounts the NFS share for Navidrome output. See
-`addon/DOCS.md`.
+output dir, port). See `addon/DOCS.md`.
 
 ## OpenClaw
 
@@ -113,9 +111,11 @@ running server. See `openclaw-plugin/README.md`.
 
 ## Syncing to Navidrome
 
-The library is served by Navidrome over an NFS mount. The add-on mounts the NFS
-export and writes finished tracks there directly. See **SYNC.md** for the
-HAOS-level automount notes.
+Finished tracks are written to `output_dir` (a mapped HA folder). Point Navidrome
+at that folder, or sync it to the Navidrome library by whatever means you use.
+Direct NFS mounting from the add-on was removed and will return later with a
+different storage design; **SYNC.md** has the older NFS automount notes for
+reference.
 
 ## Continuing this work in Kiro
 
