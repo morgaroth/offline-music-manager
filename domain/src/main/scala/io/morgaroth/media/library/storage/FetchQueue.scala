@@ -20,6 +20,7 @@ case class FetchQueueItem(
   id: UUID,
   trackId: UUID,
   status: FetchStatus,
+  priority: Int,
   startedAt: Option[ZonedDateTime],
   error: Option[String],
   createdAt: ZonedDateTime,
@@ -34,11 +35,11 @@ case class FetchQueueStats(pending: Int, running: Int, done: Int, errored: Int):
 
 /** Durable fetch queue. Backed by the `fetch_queue` table. */
 trait FetchQueueService:
-  /** Enqueue the given track ids as `pending` (idempotent per track via the
-    * unique index — already-queued tracks are skipped). Returns how many new
-    * rows were added.
+  /** Enqueue the given track ids as `pending` at the given priority (higher runs
+    * sooner). Idempotent per track via the unique index; if a track is already
+    * queued, its priority is raised to the max of old/new. Returns rows added.
     */
-  def enqueue(trackIds: Vector[UUID]): Task[Int]
+  def enqueue(trackIds: Vector[UUID], priority: Int): Task[Int]
 
   /** Atomically claim up to `n` pending rows, marking them running with a start
     * timestamp, and return the claimed (queueId, trackId) pairs.
@@ -63,5 +64,5 @@ trait FetchQueueService:
   def resetRunningToPending: Task[Int]
 
 object FetchQueueService:
-  def enqueue(ids: Vector[UUID]): ZIO[FetchQueueService, Throwable, Int] =
-    ZIO.serviceWithZIO[FetchQueueService](_.enqueue(ids))
+  def enqueue(ids: Vector[UUID], priority: Int): ZIO[FetchQueueService, Throwable, Int] =
+    ZIO.serviceWithZIO[FetchQueueService](_.enqueue(ids, priority))

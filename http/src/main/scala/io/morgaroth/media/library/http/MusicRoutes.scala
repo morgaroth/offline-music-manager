@@ -16,7 +16,7 @@ import java.util.UUID
   * Fetch is asynchronous: it returns a job id immediately and work runs on a
   * daemon fiber, pollable via the jobs endpoints.
   */
-class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverConfig: ServerConfig, queue: io.morgaroth.media.library.storage.FetchQueueService):
+class MusicRoutes(storage: ZioTracksStorageService, serverConfig: ServerConfig, queue: io.morgaroth.media.library.storage.FetchQueueService):
 
   private def json(j: Json): Response =
     Response.json(j.noSpaces)
@@ -230,27 +230,16 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverCon
           .orElseFail(Response.internalServerError)
       },
 
-      // Trigger an async fetch for a track. Query params: force (int), debug (bool).
-      Method.POST / "tracks" / uuid("id") / "fetch" -> handler { (id: UUID, req: Request) =>
-        val force = req.queryParam("force").flatMap(_.toIntOption).getOrElse(0)
-        val debug = req.queryParam("debug").exists(v => v == "true" || v == "1")
-        jobs
-          .submit(id, force, debug)
-          .map(status => json(jobJson(status)).status(Status.Accepted))
-          .orElseFail(Response.internalServerError)
-      },
-
-      // Poll a job by id.
-      Method.GET / "jobs" / uuid("jobId") -> handler { (jobId: UUID, _: Request) =>
-        jobs.get(jobId).map {
-          case Some(status) => json(jobJson(status))
-          case None => Response.notFound(s"job $jobId")
-        }
-      },
-
-      // List recent jobs.
-      Method.GET / "jobs" -> handler { (_: Request) =>
-        jobs.list.map(js => json(Json.arr(js.map(jobJson)*)))
+      // "Fetch now" from the Edit page: enqueue this single track at HIGH
+      // priority (1) so it jumps ahead of the normal batch (priority 0). Goes
+      // through the same durable queue + orchestrator as the Fetch tab.
+      Method.POST / "tracks" / uuid("id") / "fetch" -> handler { (id: UUID, _: Request) =>
+        (for
+          _ <- storage.getById(id) // 404 if the track doesn't exist
+          added <- queue.enqueue(Vector(id), priority = 1)
+          st <- queue.stats
+        yield json(Json.obj("added" -> added.asJson, "stats" -> statsJson(st))).status(Status.Accepted))
+          .orElseFail(Response.notFound(s"track $id"))
       },
 
       // --- Durable fetch queue ---
@@ -262,7 +251,7 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverCon
         val mt = req.queryParam("type").flatMap(s => TrackMediaType.byDbRepr.get(s.toLowerCase))
         (for
           matched <- storage.findForFetch(text, mt)
-          added <- queue.enqueue(matched.map(_._id))
+          added <- queue.enqueue(matched.map(_._id), priority = 0)
           st <- queue.stats
         yield json(Json.obj(
           "matched" -> matched.size.asJson,
@@ -325,6 +314,7 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverCon
       "id" -> i.id.toString.asJson,
       "trackId" -> i.trackId.toString.asJson,
       "status" -> i.status.dbRepr.asJson,
+      "priority" -> i.priority.asJson,
       "startedAt" -> i.startedAt.map(_.toString).asJson,
       "error" -> i.error.asJson,
       "title" -> i.title.asJson,
@@ -332,16 +322,6 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverCon
       "type" -> i.mediaType.asJson,
     )
 
-  private def jobJson(status: JobStatus): Json =
-    Json.obj(
-      "jobId" -> status.jobId.toString.asJson,
-      "trackId" -> status.trackId.toString.asJson,
-      "state" -> status.state.toString.toLowerCase.asJson,
-      "startedAt" -> status.startedAt.toString.asJson,
-      "finishedAt" -> status.finishedAt.map(_.toString).asJson,
-      "error" -> status.error.asJson,
-    )
-
 object MusicRoutes:
-  val live: ZLayer[ZioTracksStorageService & JobRegistry & ServerConfig & io.morgaroth.media.library.storage.FetchQueueService, Nothing, MusicRoutes] =
-    ZLayer.fromFunction(MusicRoutes(_, _, _, _))
+  val live: ZLayer[ZioTracksStorageService & ServerConfig & io.morgaroth.media.library.storage.FetchQueueService, Nothing, MusicRoutes] =
+    ZLayer.fromFunction(MusicRoutes(_, _, _))

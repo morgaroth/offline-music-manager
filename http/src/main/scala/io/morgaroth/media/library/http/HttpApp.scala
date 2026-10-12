@@ -110,7 +110,6 @@ object HttpApp extends ZIOAppDefault:
       queueLayer,
       fetcherLayer,
       ZLayer.succeed(serverConfig),
-      JobRegistry.live,
       MusicRoutes.live,
       FetchOrchestrator.live,
       serverLayer,

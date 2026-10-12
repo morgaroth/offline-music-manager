@@ -21,6 +21,7 @@ class FetchQueuePostgres(ds: DataSource) extends FetchQueueService with LazyLogg
       id = UUID.fromString(rs.getString("id")),
       trackId = UUID.fromString(rs.getString("track_id")),
       status = FetchStatus.byDbRepr.getOrElse(rs.getString("status"), FetchStatus.Pending),
+      priority = rs.getInt("priority"),
       startedAt = Option(rs.getTimestamp("started_at")).map(_.toInstant.atZone(ZoneOffset.UTC)),
       error = Option(rs.getString("error")),
       createdAt = rs.getTimestamp("created_at").toInstant.atZone(ZoneOffset.UTC),
@@ -29,13 +30,17 @@ class FetchQueuePostgres(ds: DataSource) extends FetchQueueService with LazyLogg
       mediaType = Option(rs.getString("type")).getOrElse("music"),
     )
 
-  override def enqueue(trackIds: Vector[UUID]): Task[Int] = withConnection: conn =>
-    // ON CONFLICT (track_id) DO NOTHING keeps enqueue idempotent per track.
-    val sql = "INSERT INTO fetch_queue (track_id, status) VALUES (?, 'pending') ON CONFLICT (track_id) DO NOTHING"
+  override def enqueue(trackIds: Vector[UUID], priority: Int): Task[Int] = withConnection: conn =>
+    // Idempotent per track. If already queued, raise its priority to the greater
+    // of old/new (so "Fetch now" bumps a track already enqueued by the batch).
+    val sql =
+      """INSERT INTO fetch_queue (track_id, status, priority) VALUES (?, 'pending', ?)
+        |ON CONFLICT (track_id) DO UPDATE SET priority = GREATEST(fetch_queue.priority, EXCLUDED.priority)""".stripMargin
     val ps = conn.prepareStatement(sql)
     var added = 0
     trackIds.foreach: tid =>
       ps.setObject(1, tid)
+      ps.setInt(2, priority)
       added += ps.executeUpdate()
     added
 
@@ -46,7 +51,7 @@ class FetchQueuePostgres(ds: DataSource) extends FetchQueueService with LazyLogg
       """UPDATE fetch_queue SET status = 'running', started_at = now()
         |WHERE id IN (
         |  SELECT id FROM fetch_queue WHERE status = 'pending'
-        |  ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT ?
+        |  ORDER BY priority DESC, created_at FOR UPDATE SKIP LOCKED LIMIT ?
         |)
         |RETURNING id, track_id""".stripMargin
     val ps = conn.prepareStatement(sql)
@@ -87,10 +92,10 @@ class FetchQueuePostgres(ds: DataSource) extends FetchQueueService with LazyLogg
 
   override def list: Task[Vector[FetchQueueItem]] = withConnection: conn =>
     val sql =
-      """SELECT q.id, q.track_id, q.status, q.started_at, q.error, q.created_at,
+      """SELECT q.id, q.track_id, q.status, q.priority, q.started_at, q.error, q.created_at,
         |       t.title, t.artist, t.type
         |FROM fetch_queue q JOIN tracks t ON t.id = q.track_id
-        |ORDER BY q.created_at""".stripMargin
+        |ORDER BY q.priority DESC, q.created_at""".stripMargin
     val rs = conn.prepareStatement(sql).executeQuery()
     val buf = Vector.newBuilder[FetchQueueItem]
     while rs.next() do buf += readItem(rs)

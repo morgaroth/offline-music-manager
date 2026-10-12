@@ -23,19 +23,24 @@ podman build -t "${IMAGE}" "${REPO_ROOT}"
 echo "==> replacing container ${CONTAINER}"
 podman rm -f "${CONTAINER}" >/dev/null 2>&1 || true
 
-# Output to a named volume so it persists across container recreations.
+# Bind-mount host folders so fetched files are visible on the Mac (in Finder).
+# These live under ~/omm, which the podman machine shares with the host.
+HOST_ROOT="${HOME}/omm"
+mkdir -p "${HOST_ROOT}/music" "${HOST_ROOT}/video" "${HOST_ROOT}/cache"
+echo "==> output on host: ${HOST_ROOT}/{music,video,cache}"
+
 podman run -d --name "${CONTAINER}" \
   -p "${PORT}:${PORT}" \
   -e MEDIA_LIBRARY_HTTP_PORT="${PORT}" \
-  -e MEDIA_LIBRARY_MUSIC_OUTPUT_PATH=/downloads \
-  -e MEDIA_LIBRARY_VIDEO_OUTPUT_PATH=/videos \
+  -e MEDIA_LIBRARY_MUSIC_OUTPUT_PATH=/music \
+  -e MEDIA_LIBRARY_VIDEO_OUTPUT_PATH=/video \
   -e MEDIA_LIBRARY_CACHE_PATH=/cache \
-  -v omm-videos:/videos \
-  -v omm-cache:/cache \
   -e MEDIA_LIBRARY_POSTGRES_URL="${PG_URL}" \
   -e MEDIA_LIBRARY_POSTGRES_USER="${PG_USER}" \
   -e MEDIA_LIBRARY_POSTGRES_PASSWORD="${PG_PASSWORD}" \
-  -v $PWD/omm-downloads:/downloads \
+  -v "${HOST_ROOT}/music:/music" \
+  -v "${HOST_ROOT}/video:/video" \
+  -v "${HOST_ROOT}/cache:/cache" \
   "${IMAGE}" >/dev/null
 
 echo "==> waiting for startup..."

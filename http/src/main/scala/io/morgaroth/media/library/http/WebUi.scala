@@ -191,7 +191,7 @@ object WebUi:
       |      <button onclick="clearErrored()">Clear errored</button>
       |    </div>
       |    <table>
-      |      <thead><tr><th>Title</th><th>Artist</th><th>Type</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
+      |      <thead><tr><th>Title</th><th>Artist</th><th>Type</th><th>Prio</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
       |      <tbody id="fq-rows"></tbody>
       |    </table>
       |  </div>
@@ -460,23 +460,12 @@ object WebUi:
       |
       |    async function doFetch() {
       |      if (!current) return;
-      |      msg('Starting fetch...');
+      |      msg('Queuing fetch (high priority)...');
       |      try {
       |        const res = await fetch('/tracks/' + current.id + '/fetch', { method: 'POST' });
-      |        const job = await res.json();
-      |        msg('Fetch job ' + job.jobId + ' started', 'ok');
-      |        pollJob(job.jobId);
+      |        if (!res.ok) throw new Error(await res.text());
+      |        msg('Queued at high priority. Watch the Fetch tab for progress.', 'ok');
       |      } catch (e) { msg('Fetch failed: ' + e, 'err'); }
-      |    }
-      |
-      |    async function pollJob(jobId) {
-      |      try {
-      |        const res = await fetch('/jobs/' + jobId);
-      |        const job = await res.json();
-      |        if (job.state === 'running') { setTimeout(() => pollJob(jobId), 2000); }
-      |        else if (job.state === 'succeeded') { msg('Fetch succeeded', 'ok'); }
-      |        else { msg('Fetch failed: ' + (job.error || 'unknown'), 'err'); }
-      |      } catch (e) { /* stop polling */ }
       |    }
       |
       |    // ---- Fetch queue ----
@@ -555,6 +544,7 @@ object WebUi:
       |          '<td>' + esc(it.title) + '</td>' +
       |          '<td>' + esc(it.artist) + '</td>' +
       |          '<td>' + (it.type === 'video' ? '🎬' : '🎵') + ' ' + esc(it.type) + '</td>' +
+      |          '<td>' + (it.priority > 0 ? '⬆ ' + it.priority : it.priority) + '</td>' +
       |          '<td><span class="chip ' + esc(it.status) + '">' + esc(it.status) + '</span></td>' +
       |          '<td class="muted">' + esc(it.startedAt ? it.startedAt.replace("T"," ").slice(0,19) : "") + '</td>' +
       |          '<td class="err" style="font-size:.75rem">' + esc(it.error || "") + '</td>';
