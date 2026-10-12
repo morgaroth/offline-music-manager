@@ -33,6 +33,11 @@ object WebUi:
       |           border: 1px solid #8884; background: transparent; color: inherit; }
       |    button { cursor: pointer; }
       |    button.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+      |    button:disabled { opacity: .4; cursor: not-allowed; }
+      |    .id-readonly { font-family: monospace; font-size: .8rem; opacity: .55; align-self: center;
+      |                   word-break: break-all; }
+      |    .saving { outline: 2px solid #ef4444; outline-offset: 0; }
+      |    .saved  { outline: 2px solid #22c55e; outline-offset: 0; }
       |    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
       |    button.icon-btn { padding: .25rem .5rem; font-size: 1rem; line-height: 1; border: 1px solid #8884;
       |                      background: transparent; border-radius: .4rem; }
@@ -107,32 +112,32 @@ object WebUi:
       |     <div class="edit-cols">
       |      <div class="edit-left">
       |      <div class="form-grid">
-      |        <label>ID</label><input id="f-id" readonly />
-      |        <label>URL</label><input id="f-url" />
-      |        <label>Title</label><input id="f-title" />
-      |        <label>Artist</label><input id="f-artist" />
-      |        <label>Album</label><input id="f-album" />
+      |        <label>ID</label><span id="f-id" class="id-readonly"></span>
+      |        <label>URL</label><input id="f-url" onblur="onBlur('f-url')" />
+      |        <label>Title</label><input id="f-title" onblur="onBlur('f-title')" />
+      |        <label>Artist</label><input id="f-artist" onblur="onBlur('f-artist')" />
+      |        <label>Album</label><input id="f-album" onblur="onBlur('f-album')" />
       |        <label>Type</label>
-      |        <select id="f-type">
+      |        <select id="f-type" onchange="onBlur('f-type')">
       |          <option value="music">music</option>
       |          <option value="video">video</option>
       |        </select>
       |        <label>Status</label>
-      |        <select id="f-status">
+      |        <select id="f-status" onchange="syncFetchBtn(); onBlur('f-status')">
       |          <option value="draft">draft</option>
       |          <option value="final">final</option>
       |          <option value="deleted">deleted</option>
       |        </select>
-      |        <label>Start at</label><input id="f-startAt" placeholder="mm:ss or hh:mm:ss" />
-      |        <label>End at</label><input id="f-endAt" placeholder="mm:ss or hh:mm:ss" />
-      |        <label>Fade-out (s)</label><input id="f-fadeOutSeconds" type="number" min="0" />
-      |        <label>Volume (dB)</label><input id="f-volumeChange" placeholder="e.g. -3.5" />
-      |        <label>Playlists</label><input id="f-playlists" placeholder="comma-separated" />
+      |        <label>Start at</label><input id="f-startAt" placeholder="mm:ss or hh:mm:ss" onblur="onBlur('f-startAt')" />
+      |        <label>End at</label><input id="f-endAt" placeholder="mm:ss or hh:mm:ss" onblur="onBlur('f-endAt')" />
+      |        <label>Fade-out (s)</label><input id="f-fadeOutSeconds" type="number" min="0" onblur="onBlur('f-fadeOutSeconds')" />
+      |        <label>Volume (dB)</label><input id="f-volumeChange" placeholder="e.g. -3.5" onblur="onBlur('f-volumeChange')" />
+      |        <label>Playlists</label><input id="f-playlists" placeholder="comma-separated" onblur="onBlur('f-playlists')" />
       |        <div class="hint">Comma-separated playlist names.</div>
       |      </div>
       |      <div class="actions">
       |        <button class="primary" onclick="saveAll()">Save all</button>
-      |        <button onclick="doFetch()">Fetch now</button>
+      |        <button id="btn-fetch" onclick="doFetch()" title="Only available for final tracks">Fetch now</button>
       |        <button onclick="reloadCurrent()">Reload</button>
       |        <button class="danger" onclick="deleteTrack()">Delete</button>
       |      </div>
@@ -254,13 +259,14 @@ object WebUi:
       |      current = t;
       |      document.getElementById('editEmpty').style.display = 'none';
       |      document.getElementById('editForm').style.display = 'block';
-      |      document.getElementById('f-id').value = t.id;
+      |      document.getElementById('f-id').textContent = t.id;
       |      document.getElementById('f-url').value = t.url || '';
       |      document.getElementById('f-title').value = t.title || '';
       |      document.getElementById('f-artist').value = t.artist || '';
       |      document.getElementById('f-album').value = t.album || '';
       |      document.getElementById('f-type').value = t.type || 'music';
       |      document.getElementById('f-status').value = t.status || 'draft';
+      |      syncFetchBtn();
       |      document.getElementById('f-startAt').value = t.startAt || '';
       |      document.getElementById('f-endAt').value = t.endAt || '';
       |      document.getElementById('f-fadeOutSeconds').value = t.fadeOutSeconds ?? '';
@@ -328,6 +334,15 @@ object WebUi:
       |      } catch (e) { el.innerHTML = '<span class="err">Metadata failed: ' + esc(e.message || e) + '</span>'; }
       |    }
       |
+      |    // Fetch is only meaningful for final tracks. Reflect the CURRENT dropdown
+      |    // value (not just the saved status) so it enables as soon as you pick final.
+      |    function syncFetchBtn() {
+      |      const isFinal = document.getElementById('f-status').value === 'final';
+      |      const btn = document.getElementById('btn-fetch');
+      |      btn.disabled = !isFinal;
+      |      btn.title = isFinal ? 'Fetch now' : 'Save as final first';
+      |    }
+      |
       |    async function reloadCurrent() {
       |      if (!current) return;
       |      const res = await fetch('/tracks/' + current.id);
@@ -340,6 +355,68 @@ object WebUi:
       |      });
       |      if (!res.ok) throw new Error(path + ': ' + await res.text());
       |      return res.json();
+      |    }
+      |
+      |    // field id -> { path, build(value) -> body object }. Drives save-on-blur.
+      |    const FIELD_SPECS = {
+      |      'f-url':            { path: 'url',               build: v => ({ url: v }) },
+      |      'f-title':          { path: 'title',             build: v => ({ title: v }) },
+      |      'f-artist':         { path: 'artist',            build: v => ({ artist: v }) },
+      |      'f-album':          { path: 'album',             build: v => ({ album: v }) },
+      |      'f-type':           { path: 'type',              build: v => ({ type: v }) },
+      |      'f-status':         { path: 'status',            build: v => ({ status: v }) },
+      |      'f-startAt':        { path: 'start-at',          build: v => ({ startAt: v }) },
+      |      'f-endAt':          { path: 'end-at',            build: v => ({ endAt: v }) },
+      |      'f-fadeOutSeconds': { path: 'fade-out-seconds',  build: v => ({ fadeOutSeconds: v }) },
+      |      'f-volumeChange':   { path: 'volume-change',     build: v => ({ volumeChange: v }) },
+      |      'f-playlists':      { path: 'playlists',         build: v => ({ playlists: v.split(',').map(s => s.trim()).filter(s => s) }) },
+      |    };
+      |    const trackField = { // which track property each field reflects, to detect changes
+      |      'f-url':'url','f-title':'title','f-artist':'artist','f-album':'album','f-type':'type',
+      |      'f-status':'status','f-startAt':'startAt','f-endAt':'endAt',
+      |      'f-fadeOutSeconds':'fadeOutSeconds','f-volumeChange':'volumeChange','f-playlists':'playlists',
+      |    };
+      |
+      |    // Current value of a field as a comparable string.
+      |    function currentFieldStr(id) {
+      |      if (id === 'f-playlists') return val(id).split(',').map(s=>s.trim()).filter(s=>s).join(',');
+      |      return val(id);
+      |    }
+      |    // Stored value of the mapped track property, as a comparable string.
+      |    function storedFieldStr(id) {
+      |      const key = trackField[id];
+      |      let v = current ? current[key] : '';
+      |      if (key === 'playlists') return (v || []).join(',');
+      |      if (v === null || v === undefined) return '';
+      |      return String(v);
+      |    }
+      |
+      |    // Save one field on blur if it changed; red while saving, green 5s on OK.
+      |    async function onBlur(id) {
+      |      if (!current) return;
+      |      if (currentFieldStr(id) === storedFieldStr(id)) return; // unchanged
+      |      const el = document.getElementById(id);
+      |      const spec = FIELD_SPECS[id];
+      |      el.classList.remove('saved'); el.classList.add('saving');
+      |      try {
+      |        const res = await fetch('/tracks/' + current.id + '/' + spec.path, {
+      |          method: 'PATCH', headers: { 'content-type': 'application/json' },
+      |          body: JSON.stringify(spec.build(val(id))),
+      |        });
+      |        const text = await res.text();
+      |        if (!res.ok) {
+      |          let detail = text;
+      |          try { detail = JSON.parse(text).error || text; } catch (e) {}
+      |          throw new Error(detail);
+      |        }
+      |        current = JSON.parse(text); // refresh stored track from the response
+      |        el.classList.remove('saving'); el.classList.add('saved');
+      |        setTimeout(() => el.classList.remove('saved'), 5000);
+      |        msg('Saved ' + spec.path + '.', 'ok');
+      |      } catch (e) {
+      |        el.classList.remove('saving');
+      |        msg('Failed to save ' + spec.path + ': ' + (e.message || e), 'err');
+      |      }
       |    }
       |
       |    async function saveAll() {

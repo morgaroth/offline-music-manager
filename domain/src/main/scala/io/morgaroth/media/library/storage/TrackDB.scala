@@ -66,7 +66,8 @@ object Track:
     new Track(url, title, artist, album, startAt, endAt, fadeOutSeconds, volumeChange, status, TrackId(artist, title), playlists, "", "")
 
   def apply(url: String): Track =
-    new Track(url, "", "", "", None, None, None, None, TrackStatus.Draft, None, Set.empty, "", "")
+    // Fresh tracks default to the 'all' playlist.
+    new Track(url, "", "", "", None, None, None, None, TrackStatus.Draft, None, Set("all"), "", "")
 
 object TrackId:
   val sep = "___"

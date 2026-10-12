@@ -154,6 +154,18 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverCon
           raw <- stringField(req, "status")
           status <- ZIO.fromOption(TrackStatus.byDbRepr.get(raw.toLowerCase))
             .orElseFail(IllegalArgumentException(s"unknown status '$raw'"))
+          // A track may only become `final` once it has usable metadata:
+          // title, artist, album, and at least one playlist.
+          _ <- ZIO.when(status == TrackStatus.Final):
+            storage.getById(id).flatMap: t =>
+              val missing = Vector(
+                Option.when(t.title.trim.isEmpty)("title"),
+                Option.when(t.artist.trim.isEmpty)("artist"),
+                Option.when(t.album.trim.isEmpty)("album"),
+                Option.when(t.playlists.filter(_.nonEmpty).isEmpty)("playlists"),
+              ).flatten
+              ZIO.when(missing.nonEmpty):
+                ZIO.fail(IllegalArgumentException(s"cannot set final: missing ${missing.mkString(", ")}"))
           track <- storage.updateStatus(id, status)
         yield trackResponse(track))
           .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))

@@ -37,9 +37,17 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
 
   private def handleMusic(cfg: Configuration)(using definition: Track): Task[Either[Throwable, Unit]] =
     val versionId = definition.UFID + algorithmVersion
-    val destination = File(cfg.destinationDir, s"${definition.title} - ${definition.artist}.mp3")
-    if destination.exists() && cfg.forceLevel < 1 && getUFIDTag(destination).contains(versionId) then
-      logger.info("File {} already downloaded", definition.info)
+    val fileName = s"${definition.title} - ${definition.artist}.mp3"
+    // A track lives only under its playlist folders — no generic root copy.
+    // Every track has >= 1 playlist, so there is always at least one target.
+    val playlists = definition.playlists.filter(_.nonEmpty)
+    val targets = playlists.map(p => File(File(cfg.destinationDir, p), fileName)).toVector
+    // Skip only if ALL targets already exist with the current version.
+    val alreadyDone =
+      targets.nonEmpty && cfg.forceLevel < 1 &&
+        targets.forall(f => f.exists() && getUFIDTag(f).contains(versionId))
+    if alreadyDone then
+      logger.info("File {} already present in all playlists", definition.info)
       ZIO.succeed(Right(()))
     else
       val work = for
@@ -52,25 +60,28 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
             ZIO.logInfo(s"Downloaded ${definition.info}, now converting...")
         )
         (source, ytMeta) = a
-        _ <- ZIO.logInfo(s"[pipeline] downloaded source: ${source.getAbsolutePath} (exists=${source.exists()}); destination will be ${destination.getAbsolutePath}")
+        _ <- ZIO.logInfo(s"[pipeline] downloaded source: ${source.getAbsolutePath} (exists=${source.exists()}); playlists: ${playlists.mkString(", ")}")
         mp3file = convertToMP3(source, cfg, definition)
         _ <- ZIO.logInfo(s"[pipeline] converted mp3: ${mp3file.getAbsolutePath} (exists=${mp3file.exists()})")
         trimmed = strip(mp3file, definition, cfg.debug)
         _ <- ZIO.logInfo(s"[pipeline] trimmed: ${trimmed.getAbsolutePath} (exists=${trimmed.exists()})")
-        finalFile = dist(trimmed, destination)
+        // Tag the single built file in the work dir, then copy into each playlist.
+        taggedName = sanitizeFileName(fileName)
+        tagged = File(workDir, taggedName)
+        _ = dist(trimmed, tagged)
         _ <- addTags(
           album = Option(definition.album).filter(_.nonEmpty).getOrElse("Twórczość"),
           author = definition.artist,
           title = definition.title,
-          file = finalFile,
+          file = tagged,
           id = versionId,
         )
-        _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
+        _ <- setTimestamps(tagged, definition.createdAtLocal, definition.updatedAtLocal)
         _ <- storage.updateRawTitle(definition._id, ytMeta.title).when(definition.rawTitle != ytMeta.title)
         _ <- storage.updateRawDescription(definition._id, ytMeta.description).when(definition.rawDescription != ytMeta.description)
-        _ <- ZIO.fromEither(copyFileToPlaylistDirectories(cfg.destinationDir, destination, definition))
+        _ <- ZIO.foreachDiscard(targets)(t => ZIO.attempt(copyInto(tagged, t)))
         _ <- ZIO.attempt(deleteRecursively(workDir)).ignore
-        _ <- ZIO.logInfo(s"File ${definition.info} ready")
+        _ <- ZIO.logInfo(s"File ${definition.info} ready in ${targets.size} playlist(s)")
       yield Right(())
 
       work.catchSome:
@@ -93,24 +104,29 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
     */
   private def handleVideo(cfg: Configuration)(using definition: Track): Task[Either[Throwable, Unit]] =
     val safeName = sanitizeFileName(s"${definition.title} - ${definition.artist}".trim.stripSuffix("-").trim)
-    val destination = File(cfg.videoDestinationDir, s"$safeName.mp4")
-    if destination.exists() && cfg.forceLevel < 1 then
-      logger.info("Video {} already present", definition.info)
+    val fileName = s"$safeName.mkv"
+    // Same as music: one copy per playlist under the video dir, no root copy.
+    val playlists = definition.playlists.filter(_.nonEmpty)
+    val targets = playlists.map(p => File(File(cfg.videoDestinationDir, p), fileName)).toVector
+    val alreadyDone = targets.nonEmpty && cfg.forceLevel < 1 && targets.forall(_.exists())
+    if alreadyDone then
+      logger.info("Video {} already present in all playlists", definition.info)
       ZIO.succeed(Right(()))
     else
       val work = for
         _ <- ZIO.attempt(active.incrementAndGet())
-        _ <- ZIO.attempt(cfg.videoDestinationDir.mkdirs())
         workDir = workDirFor(cfg, definition)
         source <- ZIO.logInfo(s"Downloading video ${definition.info}...") *>
           downloadVideo(definition.url, workDir, cfg.downloaderExec, cfg.cookieArgs, cfg.debug)
-        _ <- ZIO.logInfo(s"[pipeline] downloaded video source: ${source.getAbsolutePath} (exists=${source.exists()}); destination ${destination.getAbsolutePath}")
-        transcoded <- ZIO.attemptBlocking(transcodeToH264(source, cfg, definition))
-        _ <- ZIO.logInfo(s"[pipeline] transcoded: ${transcoded.getAbsolutePath} (exists=${transcoded.exists()})")
-        finalFile = dist(transcoded, destination)
+        _ <- ZIO.logInfo(s"[pipeline] downloaded video source: ${source.getAbsolutePath} (exists=${source.exists()}); playlists: ${playlists.mkString(", ")}")
+        // No re-encode. If start/end trim is set, do a fast stream-copy cut;
+        // otherwise use the downloaded file as-is.
+        finalFile <- ZIO.attemptBlocking(trimVideoIfNeeded(source, cfg, definition))
+        _ <- ZIO.logInfo(s"[pipeline] video ready to distribute: ${finalFile.getAbsolutePath} (exists=${finalFile.exists()})")
         _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
+        _ <- ZIO.foreachDiscard(targets)(t => ZIO.attempt(copyInto(finalFile, t)))
         _ <- ZIO.attempt(deleteRecursively(workDir)).ignore
-        _ <- ZIO.logInfo(s"Video ${definition.info} ready")
+        _ <- ZIO.logInfo(s"Video ${definition.info} ready in ${targets.size} playlist(s)")
       yield Right(())
 
       work.catchSome:
@@ -122,17 +138,21 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
           ZIO.succeed(Left(t))
       .ensuring(ZIO.succeed(active.decrementAndGet()))
 
-  /** Download best video+audio, merged to a single mp4 by yt-dlp. */
+  /** Download best video+audio up to 1080p, merged into an MKV container with
+    * NO re-encode. We keep whatever codec YouTube serves (VP9/AV1/H.264) and let
+    * Jellyfin handle any transcoding at playback. MKV holds any codec cleanly.
+    */
   private def downloadVideo(url: String, dest: File, downloaderExec: String, cookieArgs: Seq[String], debug: Boolean)(using track: Track): Task[File] =
     ZIO.fromEither:
       def doWork(retries: Int = 3): Either[Throwable, File] =
         val outTemplate = File(dest, "%(title)s (%(id)s) - VIDEO.%(ext)s").toPath.toString
         val args = Seq(downloaderExec) ++ cookieArgs ++ Seq(
           "--restrict-filenames",
-          // Cap at 1080p (no 4K/UHD) — best quality up to Full HD, broadly
-          // playable on older webOS and Jellyfin direct-play.
+          // Cap at 1080p (no 4K/UHD) to save space; take whatever codec is best
+          // at that resolution — no local transcode.
           "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-          "--merge-output-format", "mp4",
+          // Remux (not re-encode) into mkv, which accepts VP9/AV1/Opus/AAC/H.264.
+          "--merge-output-format", "mkv",
           "--print", "after_move:filepath",
           "--no-simulate",
           "-o", outTemplate,
@@ -157,26 +177,31 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
           case right => right
       doWork()
 
-  /** Transcode to H.264 High + AAC in MP4, honoring optional start/end trim.
-    * CRF 18 ~ visually lossless; `-movflags +faststart` for streaming.
+  /** Apply optional start/end trim with a stream COPY (no re-encode) when set;
+    * otherwise return the source untouched. Keeps the original codec.
     */
-  private def transcodeToH264(source: File, config: Configuration, track: Track): File =
-    val target = File(source.getParentFile, sanitizeFileName(s"${track.title} - ${track.artist}") + " - H264.mp4")
-    target.delete()
+  private def trimVideoIfNeeded(source: File, config: Configuration, track: Track): File =
     val (startOpt, endOpt) = fixDuration(track.startAt, track.endAt)
-    val trimIn = startOpt.toList.flatMap(v => List("-ss", v))
-    val trimOut = endOpt.toList.flatMap(v => List("-to", v))
-    val encodeArgs = Seq(
-      "-c:v", "libx264", "-profile:v", "high", "-level", "4.0",
-      "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-b:a", "192k",
-      "-movflags", "+faststart",
-    )
-    ffmpeg(trimIn*)(source)((encodeArgs ++ trimOut)*)(target)(quiet = true, debug = config.debug)
-    target
+    if startOpt.isEmpty && endOpt.isEmpty then source
+    else
+      val target = File(source.getParentFile, sanitizeFileName(s"${track.title} - ${track.artist}") + " - CUT.mkv")
+      target.delete()
+      val trimIn = startOpt.toList.flatMap(v => List("-ss", v))
+      val trimOut = endOpt.toList.flatMap(v => List("-to", v))
+      // Stream copy: fast, lossless, keeps whatever codec YouTube served.
+      ffmpeg(trimIn*)(source)((Seq("-c", "copy") ++ trimOut)*)(target)(quiet = true, debug = config.debug)
+      target
 
   private def sanitizeFileName(s: String): String =
     s.replaceAll("""[/\\:*?"<>|]""", "_").trim
+
+  /** Copy `src` to `dest`, creating the parent dir, overwriting if present.
+    * Cross-filesystem safe (plain copy, not rename).
+    */
+  private def copyInto(src: File, dest: File): Unit =
+    Option(dest.getParentFile).foreach(_.mkdirs())
+    Files.copy(src.toPath, dest.toPath, StandardCopyOption.REPLACE_EXISTING)
+    logger.info(s"[dist] copied -> ${dest.getAbsolutePath} (${dest.length} bytes)")
 
   /** A per-track working directory under the cache root. Isolates concurrent
     * fetches so two tracks sharing a source URL can't collide on temp filenames.
@@ -198,20 +223,6 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
           val thisId = id.incrementAndGet()
           logger.info(s"$thisId/${definitions.size} ready, ${active.get()} active, ${activeDownloads.get()} active downloads")
       }.withParallelism(10)
-
-  def copyFileToPlaylistDirectories(destinationDir: File, file: File, track: Track): Either[Throwable, Unit] =
-    track.playlists.foldLeft(Right(()): Either[Throwable, Unit]):
-      case (acc, playlist) =>
-        acc.flatMap: _ =>
-          try
-            logger.info(s"Copying ${file.getName} to $playlist")
-            val playlistDir = File(destinationDir, playlist)
-            if !playlistDir.exists() then
-              logger.info(s"$playlistDir does not exist, creating...")
-              playlistDir.mkdir()
-            Files.copy(file.toPath, File(playlistDir, file.getName).toPath)
-            Right(())
-          catch case e: Throwable => Left(e)
 
   def setTimestamps(file: File, created: LocalDateTime, modified: LocalDateTime): Task[Unit] =
     ZIO.attempt:

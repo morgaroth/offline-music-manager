@@ -261,10 +261,14 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
     withConnection: conn =>
       val conditions = Vector.newBuilder[String]
       val params = Vector.newBuilder[String]
-      // Only `final` tracks qualify to be fetched, with usable metadata.
+      // Only `final` tracks qualify to be fetched, with usable metadata:
+      // title, artist, album, and at least one playlist (same rule the app
+      // enforces on the status->final transition).
       conditions += "status = 'final'"
       conditions += "artist != ''"
       conditions += "title != ''"
+      conditions += "album != ''"
+      conditions += "array_length(playlists, 1) >= 1"
       mediaType.foreach: mt =>
         conditions += "type = ?"
         params += mt.dbRepr
