@@ -43,6 +43,14 @@ lazy val http = project.in(file("http"))
   .settings(
     name := "MusicLibraryHttp",
     maintainer := "Mateusz Jaje <mateuszjaje@gmail.com>",
+    javaOptions ++= Seq(
+      "-Dio.netty.tryReflectionSetAccessible=false",
+      "-Dio.netty.noUnsafe=true",
+    ),
+    bashScriptExtraDefines ++= Seq(
+      """addJava "-Dio.netty.tryReflectionSetAccessible=false"""",
+      """addJava "-Dio.netty.noUnsafe=true"""",
+    ),
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-http" % zioHttpVersion,
       "org.postgresql" % "postgresql" % "42.7.3",
