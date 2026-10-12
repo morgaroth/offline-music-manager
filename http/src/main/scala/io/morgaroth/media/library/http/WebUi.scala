@@ -96,8 +96,6 @@ object WebUi:
       |        <option value="deleted">deleted</option>
       |      </select>
       |      <button class="primary" onclick="search()">Search</button>
-      |      <input id="addUrl" placeholder="Add track by URL..." size="26" />
-      |      <button onclick="addTrack()">Add</button>
       |    </div>
       |    <table>
       |      <thead><tr><th>Title</th><th>Artist</th><th>Album</th><th>Type</th><th>Status</th><th></th></tr></thead>
@@ -107,7 +105,11 @@ object WebUi:
       |
       |  <!-- ===== Edit tab ===== -->
       |  <div id="panel-edit" class="panel">
-      |    <div id="editEmpty" class="muted">No track selected. Pick one from the Search tab.</div>
+      |    <div class="bar">
+      |      <input id="addUrl" placeholder="Add track by URL..." size="30" />
+      |      <button class="primary" onclick="addTrack()">Add</button>
+      |    </div>
+      |    <div id="editEmpty" class="muted">No track selected. Pick one from the Search tab, or add one by URL above.</div>
       |    <div id="editForm" style="display:none">
       |     <div class="edit-cols">
       |      <div class="edit-left">
@@ -136,7 +138,6 @@ object WebUi:
       |        <div class="hint">Comma-separated playlist names.</div>
       |      </div>
       |      <div class="actions">
-      |        <button class="primary" onclick="saveAll()">Save all</button>
       |        <button id="btn-fetch" onclick="doFetch()" title="Only available for final tracks">Fetch now</button>
       |        <button onclick="reloadCurrent()">Reload</button>
       |        <button class="danger" onclick="deleteTrack()">Delete</button>
@@ -349,14 +350,6 @@ object WebUi:
       |      if (res.ok) openEditor(await res.json());
       |    }
       |
-      |    async function patch(path, body) {
-      |      const res = await fetch('/tracks/' + current.id + '/' + path, {
-      |        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-      |      });
-      |      if (!res.ok) throw new Error(path + ': ' + await res.text());
-      |      return res.json();
-      |    }
-      |
       |    // field id -> { path, build(value) -> body object }. Drives save-on-blur.
       |    const FIELD_SPECS = {
       |      'f-url':            { path: 'url',               build: v => ({ url: v }) },
@@ -417,28 +410,6 @@ object WebUi:
       |        el.classList.remove('saving');
       |        msg('Failed to save ' + spec.path + ': ' + (e.message || e), 'err');
       |      }
-      |    }
-      |
-      |    async function saveAll() {
-      |      if (!current) return;
-      |      msg('Saving...');
-      |      try {
-      |        // Order: url first (may reset status), then the rest, status last.
-      |        await patch('url', { url: val('f-url') });
-      |        await patch('title', { title: val('f-title') });
-      |        await patch('artist', { artist: val('f-artist') });
-      |        await patch('album', { album: val('f-album') });
-      |        await patch('start-at', { startAt: val('f-startAt') });
-      |        await patch('end-at', { endAt: val('f-endAt') });
-      |        await patch('fade-out-seconds', { fadeOutSeconds: val('f-fadeOutSeconds') });
-      |        await patch('volume-change', { volumeChange: val('f-volumeChange') });
-      |        const playlists = val('f-playlists').split(',').map(s => s.trim()).filter(s => s);
-      |        await patch('playlists', { playlists });
-      |        await patch('type', { type: val('f-type') });
-      |        const updated = await patch('status', { status: val('f-status') });
-      |        current = updated;
-      |        msg('Saved.', 'ok');
-      |      } catch (e) { msg('Save failed: ' + e, 'err'); }
       |    }
       |
       |    async function deleteTrack() {

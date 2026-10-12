@@ -25,7 +25,7 @@ podman rm -f "${CONTAINER}" >/dev/null 2>&1 || true
 
 # Bind-mount host folders so fetched files are visible on the Mac (in Finder).
 # These live under ~/omm, which the podman machine shares with the host.
-HOST_ROOT="${HOME}/omm"
+HOST_ROOT="${REPO_ROOT}/omm"
 mkdir -p "${HOST_ROOT}/music" "${HOST_ROOT}/video" "${HOST_ROOT}/cache"
 echo "==> output on host: ${HOST_ROOT}/{music,video,cache}"
 
