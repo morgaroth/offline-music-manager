@@ -32,6 +32,10 @@ trait ZioTracksStorageService:
   ): Task[Vector[Track]]
   def findAllReadyToFetch: Task[Vector[Track]]
   def genericSearch(text: String, page: Int): Task[Vector[Track]]
+  /** All `final` tracks matching an optional text (over url/title/artist/album)
+    * and optional media type. Used to enqueue a fetch batch. Not paginated.
+    */
+  def findForFetch(text: Option[String], mediaType: Option[MediaType]): Task[Vector[Track]]
 
 object ZioTracksStorageService:
   def getById(id: UUID): ZIO[ZioTracksStorageService, Throwable, Track] =

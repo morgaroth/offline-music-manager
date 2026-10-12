@@ -45,9 +45,10 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
       val work = for
         _ <- ZIO.attempt(active.incrementAndGet())
         sem <- Semaphore.make(4)
+        workDir = workDirFor(cfg, definition)
         a <- sem.withPermit(
           ZIO.logInfo(s"Downloading ${definition.info}...") *>
-            download(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.cookieArgs, cfg.debug) <*
+            download(definition.url, workDir, cfg.downloaderExec, cfg.cookieArgs, cfg.debug) <*
             ZIO.logInfo(s"Downloaded ${definition.info}, now converting...")
         )
         (source, ytMeta) = a
@@ -68,6 +69,7 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
         _ <- storage.updateRawTitle(definition._id, ytMeta.title).when(definition.rawTitle != ytMeta.title)
         _ <- storage.updateRawDescription(definition._id, ytMeta.description).when(definition.rawDescription != ytMeta.description)
         _ <- ZIO.fromEither(copyFileToPlaylistDirectories(cfg.destinationDir, destination, definition))
+        _ <- ZIO.attempt(deleteRecursively(workDir)).ignore
         _ <- ZIO.logInfo(s"File ${definition.info} ready")
       yield Right(())
 
@@ -99,14 +101,15 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
       val work = for
         _ <- ZIO.attempt(active.incrementAndGet())
         _ <- ZIO.attempt(cfg.videoDestinationDir.mkdirs())
+        workDir = workDirFor(cfg, definition)
         source <- ZIO.logInfo(s"Downloading video ${definition.info}...") *>
-          downloadVideo(definition.url, cfg.cacheLocation, cfg.downloaderExec, cfg.cookieArgs, cfg.debug)
+          downloadVideo(definition.url, workDir, cfg.downloaderExec, cfg.cookieArgs, cfg.debug)
         _ <- ZIO.logInfo(s"[pipeline] downloaded video source: ${source.getAbsolutePath} (exists=${source.exists()}); destination ${destination.getAbsolutePath}")
         transcoded <- ZIO.attemptBlocking(transcodeToH264(source, cfg, definition))
         _ <- ZIO.logInfo(s"[pipeline] transcoded: ${transcoded.getAbsolutePath} (exists=${transcoded.exists()})")
         finalFile = dist(transcoded, destination)
         _ <- setTimestamps(finalFile, definition.createdAtLocal, definition.updatedAtLocal)
-        _ <- ZIO.attempt(source.delete())
+        _ <- ZIO.attempt(deleteRecursively(workDir)).ignore
         _ <- ZIO.logInfo(s"Video ${definition.info} ready")
       yield Right(())
 
@@ -174,6 +177,18 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
 
   private def sanitizeFileName(s: String): String =
     s.replaceAll("""[/\\:*?"<>|]""", "_").trim
+
+  /** A per-track working directory under the cache root. Isolates concurrent
+    * fetches so two tracks sharing a source URL can't collide on temp filenames.
+    */
+  private def workDirFor(cfg: Configuration, track: Track): File =
+    val d = File(cfg.cacheLocation, track._id.toString)
+    d.mkdirs()
+    d
+
+  private def deleteRecursively(f: File): Unit =
+    if f.isDirectory then Option(f.listFiles).foreach(_.foreach(deleteRecursively))
+    f.delete()
 
   private def doAllWork(definitions: Vector[Track], cfg: Configuration): Task[Unit] =
     ZIO.attempt(cfg.destinationDir.mkdirs()) *>
@@ -312,8 +327,29 @@ class ZIOFetcher(storage: ZioTracksStorageService) extends LazyLogging:
     destination
 
   def addTags(file: File, author: String, title: String, album: String, id: String): Task[String] =
+    // Write well-formed ID3v2.3 tags via mutagen. mid3v2 writes v2.4 by default,
+    // which some scanners (incl. older Navidrome/TagLib setups) mis-read, showing
+    // [Unknown Artist]/[Unknown Album]. v2.3 is the broadly-compatible version.
+    // We also set TPE2 (album artist) so Navidrome groups albums correctly.
+    // Values are passed via argv (not string-interpolated) to avoid quoting bugs.
+    val script =
+      """|import sys
+         |from mutagen.id3 import ID3, ID3NoHeaderError, TIT2, TPE1, TPE2, TALB, UFID
+         |path, title, artist, album, ufid = sys.argv[1:6]
+         |try:
+         |    tags = ID3(path)
+         |except ID3NoHeaderError:
+         |    tags = ID3()
+         |tags.setall('TIT2', [TIT2(encoding=3, text=[title])])
+         |tags.setall('TPE1', [TPE1(encoding=3, text=[artist])])
+         |tags.setall('TPE2', [TPE2(encoding=3, text=[artist])])
+         |tags.setall('TALB', [TALB(encoding=3, text=[album])])
+         |tags.setall('UFID', [UFID(owner='definitionhash', data=ufid.encode())])
+         |tags.update_to_v23()
+         |tags.save(path, v2_version=3)
+         |""".stripMargin
     ZIO.attempt:
-      Seq("mid3v2", file.getAbsolutePath, "-t", title, "-a", author, "-A", album, "--UFID", s"definitionhash:$id").!!
+      Seq("python3", "-c", script, file.getAbsolutePath, title, author, album, id).!!
 
   def getUFIDTag(file: File): Option[String] =
     Seq("mid3v2", file.getAbsolutePath, "--list").!!

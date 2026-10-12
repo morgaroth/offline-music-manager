@@ -1,6 +1,6 @@
 ---
 name: Offline Media Manager
-version: "1.4.0"
+version: "1.5.0"
 slug: music_library
 description: >-
   Download and manage music and video. Exposes an HTTP UI + JSON API for an

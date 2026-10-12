@@ -2,7 +2,7 @@ package io.morgaroth.media.library.http
 
 import com.typesafe.config.ConfigFactory
 import io.morgaroth.media.library.jobs.ZIOFetcher
-import io.morgaroth.media.library.storage.{DatabaseConfig, DataSourceLive, TracksStoragePostgres, ZioTracksStorageService}
+import io.morgaroth.media.library.storage.{DatabaseConfig, DataSourceLive, FetchQueuePostgres, FetchQueueService, TracksStoragePostgres, ZioTracksStorageService}
 import zio.*
 import zio.http.*
 
@@ -56,8 +56,14 @@ object HttpApp extends ZIOAppDefault:
   private val configLayer: ZLayer[Any, Throwable, DatabaseConfig] =
     ZLayer.fromZIO(ZIO.attempt(databaseConfig))
 
+  private val dataSourceLayer: ZLayer[Any, Throwable, javax.sql.DataSource] =
+    configLayer >>> DataSourceLive.layer
+
   private val storageLayer: ZLayer[Any, Throwable, ZioTracksStorageService] =
-    configLayer >>> DataSourceLive.layer >>> TracksStoragePostgres.layer
+    dataSourceLayer >>> TracksStoragePostgres.layer
+
+  private val queueLayer: ZLayer[Any, Throwable, FetchQueueService] =
+    dataSourceLayer >>> FetchQueuePostgres.layer
 
   private val fetcherLayer: ZLayer[ZioTracksStorageService, Nothing, ZIOFetcher] =
     ZIOFetcher.live
@@ -76,12 +82,19 @@ object HttpApp extends ZIOAppDefault:
 
   // --- serve mode -----------------------------------------------------------
 
-  private val serveProgram: ZIO[MusicRoutes & Server, Throwable, Unit] =
+  private val serveProgram: ZIO[MusicRoutes & Server & FetchQueueService & FetchOrchestrator, Throwable, Unit] =
     for
       routes <- ZIO.service[MusicRoutes]
+      queue <- ZIO.service[FetchQueueService]
+      orchestrator <- ZIO.service[FetchOrchestrator]
       _ <- ensureDirs
-      _ <- ZIO.logInfo(s"Music library HTTP API + UI listening on 0.0.0.0:${serverConfig.port}")
-      _ <- ZIO.logInfo(s"Fetch output dir: ${serverConfig.outputDir.getAbsolutePath}")
+      // Boot recovery: a prior crash may have left rows stuck in `running`.
+      reset <- queue.resetRunningToPending
+      _ <- ZIO.logInfo(s"Fetch queue: reset $reset stale running rows to pending").when(reset > 0)
+      // Start the durable fetch orchestrator in the background.
+      _ <- orchestrator.run.forkDaemon
+      _ <- ZIO.logInfo(s"Media library HTTP API + UI listening on 0.0.0.0:${serverConfig.port}")
+      _ <- ZIO.logInfo(s"Music: ${serverConfig.outputDir.getAbsolutePath}  Video: ${serverConfig.videoOutputDir.getAbsolutePath}  (parallelism ${serverConfig.fetchParallelism})")
       _ <- Server.serve(routes.routes)
     yield ()
 
@@ -94,10 +107,12 @@ object HttpApp extends ZIOAppDefault:
   private val serve: ZIO[Any, Throwable, Unit] =
     serveProgram.provide(
       storageLayer,
+      queueLayer,
       fetcherLayer,
       ZLayer.succeed(serverConfig),
       JobRegistry.live,
       MusicRoutes.live,
+      FetchOrchestrator.live,
       serverLayer,
     )
 

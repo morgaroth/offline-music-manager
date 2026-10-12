@@ -3,6 +3,7 @@ package io.morgaroth.media.library.http
 import io.circe.syntax.*
 import io.circe.{Json, parser}
 import io.morgaroth.media.library.http.JsonCodecs.given
+import io.morgaroth.media.library.jobs.MetaDataFetcher
 import io.morgaroth.media.library.storage.{MediaType as TrackMediaType, Track, TrackStatus, ZioTracksStorageService}
 import zio.*
 import zio.http.*
@@ -15,13 +16,17 @@ import java.util.UUID
   * Fetch is asynchronous: it returns a job id immediately and work runs on a
   * daemon fiber, pollable via the jobs endpoints.
   */
-class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
+class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry, serverConfig: ServerConfig, queue: io.morgaroth.media.library.storage.FetchQueueService):
 
   private def json(j: Json): Response =
     Response.json(j.noSpaces)
 
   private def trackResponse(t: Track): Response = json(t.asJson)
   private def tracksResponse(ts: Vector[Track]): Response = json(ts.asJson)
+
+  // yt-dlp cookie args from the configured cookies file (empty when unset).
+  private val cookieArgs: Seq[String] =
+    serverConfig.cookiesFile.filter(_.nonEmpty).toSeq.flatMap(f => Seq("--cookies", f))
 
   private def badRequest(msg: String): Response =
     Response.json(Json.obj("error" -> msg.asJson).noSpaces).status(Status.BadRequest)
@@ -88,6 +93,38 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
         storage.delete(id)
           .as(Response.status(Status.NoContent))
           .orElseFail(Response.notFound(s"track $id"))
+      },
+
+      // YouTube metadata for a track's URL (duration, uploader, thumbnail, raw
+      // title/description) — runs yt-dlp metadata-only (no download). Used by the
+      // Edit page side panel to help decide trim/settings.
+      Method.GET / "tracks" / uuid("id") / "metadata" -> handler { (id: UUID, _: Request) =>
+        (for
+          track <- storage.getById(id)
+          meta <- ZIO.fromEither(
+            MetaDataFetcher.getYTMetadata(serverConfig.downloaderExec, track.url, None, cookieArgs)
+          )
+          // Persist raw title/description ONLY when the fetch returned a
+          // non-empty value that differs. The raw_* columns preserve the real
+          // source metadata so a dead URL can be re-sourced later, so we never
+          // overwrite a good stored value with an empty/blank one (yt-dlp can
+          // exit 0 yet return empty fields for gated/changed pages).
+          newTitle = meta.title.trim
+          newDesc = meta.description.trim
+          _ <- storage.updateRawTitle(id, newTitle).when(newTitle.nonEmpty && newTitle != track.rawTitle)
+          _ <- storage.updateRawDescription(id, newDesc).when(newDesc.nonEmpty && newDesc != track.rawDescription)
+        yield json(Json.obj(
+          "title" -> meta.title.asJson,
+          "fullTitle" -> meta.fulltitle.asJson,
+          "description" -> meta.description.asJson,
+          "uploader" -> meta.uploader.asJson,
+          "uploadDate" -> meta.upload_date.asJson,
+          "thumbnail" -> meta.thumbnail.asJson,
+          "durationSeconds" -> meta.duration.asJson,
+          "durationString" -> meta.duration_string.asJson,
+          "webpageUrl" -> meta.webpage_url.asJson,
+        )))
+          .catchAll(t => ZIO.succeed(badRequest(s"metadata lookup failed: ${t.getMessage}")))
       },
 
       // Create a track from a URL. Body: { "url": "..." }.
@@ -203,6 +240,49 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
       Method.GET / "jobs" -> handler { (_: Request) =>
         jobs.list.map(js => json(Json.arr(js.map(jobJson)*)))
       },
+
+      // --- Durable fetch queue ---
+
+      // Enqueue all FINAL tracks matching the query (?q= text, ?type= music|video).
+      // Only `final` tracks qualify regardless of query.
+      Method.POST / "fetch-queue" -> handler { (req: Request) =>
+        val text = req.queryParam("q").map(_.trim).filter(_.nonEmpty)
+        val mt = req.queryParam("type").flatMap(s => TrackMediaType.byDbRepr.get(s.toLowerCase))
+        (for
+          matched <- storage.findForFetch(text, mt)
+          added <- queue.enqueue(matched.map(_._id))
+          st <- queue.stats
+        yield json(Json.obj(
+          "matched" -> matched.size.asJson,
+          "added" -> added.asJson,
+          "stats" -> statsJson(st),
+        )).status(Status.Accepted))
+          .orElseFail(Response.internalServerError)
+      },
+
+      // Queue stats + rows (for the progress view).
+      Method.GET / "fetch-queue" -> handler { (_: Request) =>
+        (for
+          st <- queue.stats
+          items <- queue.list
+        yield json(Json.obj(
+          "stats" -> statsJson(st),
+          "items" -> Json.arr(items.map(queueItemJson)*),
+        )))
+          .orElseFail(Response.internalServerError)
+      },
+
+      // Kill: remove pending rows (running ones finish, then cleanup empties).
+      Method.DELETE / "fetch-queue" / "pending" -> handler { (_: Request) =>
+        queue.clearPending.map(n => json(Json.obj("removed" -> n.asJson)))
+          .orElseFail(Response.internalServerError)
+      },
+
+      // Admin: clear errored rows.
+      Method.DELETE / "fetch-queue" / "errored" -> handler { (_: Request) =>
+        queue.clearErrored.map(n => json(Json.obj("removed" -> n.asJson)))
+          .orElseFail(Response.internalServerError)
+      },
     )
 
   private def updateWith(req: Request, field: String)(f: String => Task[Track]): ZIO[Any, Response, Response] =
@@ -219,6 +299,27 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
     yield trackResponse(track))
       .catchAll(t => ZIO.succeed(badRequest(t.getMessage)))
 
+  private def statsJson(s: io.morgaroth.media.library.storage.FetchQueueStats): Json =
+    Json.obj(
+      "pending" -> s.pending.asJson,
+      "running" -> s.running.asJson,
+      "done" -> s.done.asJson,
+      "errored" -> s.errored.asJson,
+      "total" -> s.total.asJson,
+    )
+
+  private def queueItemJson(i: io.morgaroth.media.library.storage.FetchQueueItem): Json =
+    Json.obj(
+      "id" -> i.id.toString.asJson,
+      "trackId" -> i.trackId.toString.asJson,
+      "status" -> i.status.dbRepr.asJson,
+      "startedAt" -> i.startedAt.map(_.toString).asJson,
+      "error" -> i.error.asJson,
+      "title" -> i.title.asJson,
+      "artist" -> i.artist.asJson,
+      "type" -> i.mediaType.asJson,
+    )
+
   private def jobJson(status: JobStatus): Json =
     Json.obj(
       "jobId" -> status.jobId.toString.asJson,
@@ -230,5 +331,5 @@ class MusicRoutes(storage: ZioTracksStorageService, jobs: JobRegistry):
     )
 
 object MusicRoutes:
-  val live: ZLayer[ZioTracksStorageService & JobRegistry, Nothing, MusicRoutes] =
-    ZLayer.fromFunction(MusicRoutes(_, _))
+  val live: ZLayer[ZioTracksStorageService & JobRegistry & ServerConfig & io.morgaroth.media.library.storage.FetchQueueService, Nothing, MusicRoutes] =
+    ZLayer.fromFunction(MusicRoutes(_, _, _, _))

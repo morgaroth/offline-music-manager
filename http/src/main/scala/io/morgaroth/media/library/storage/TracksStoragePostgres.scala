@@ -257,6 +257,31 @@ class TracksStoragePostgres(ds: DataSource) extends ZioTracksStorageService with
     while rs.next() do tracks = tracks :+ readTrack(rs)
     tracks
 
+  override def findForFetch(text: Option[String], mediaType: Option[MediaType]): Task[Vector[Track]] =
+    withConnection: conn =>
+      val conditions = Vector.newBuilder[String]
+      val params = Vector.newBuilder[String]
+      // Only `final` tracks qualify to be fetched, with usable metadata.
+      conditions += "status = 'final'"
+      conditions += "artist != ''"
+      conditions += "title != ''"
+      mediaType.foreach: mt =>
+        conditions += "type = ?"
+        params += mt.dbRepr
+      text.map(_.trim).filter(_.nonEmpty).foreach: t =>
+        conditions += "(url ILIKE ? OR artist ILIKE ? OR title ILIKE ? OR album ILIKE ?)"
+        val p = s"%$t%"
+        params += p; params += p; params += p; params += p
+      val sql = s"SELECT * FROM tracks WHERE ${conditions.result().mkString(" AND ")} ORDER BY updated_at DESC"
+      val paramValues = params.result()
+      logQuery(sql, paramValues)
+      val ps = conn.prepareStatement(sql)
+      paramValues.zipWithIndex.foreach((v, i) => ps.setString(i + 1, v))
+      val rs = ps.executeQuery()
+      var tracks = Vector.empty[Track]
+      while rs.next() do tracks = tracks :+ readTrack(rs)
+      tracks
+
   override def genericSearch(text: String, page: Int): Task[Vector[Track]] = withConnection: conn =>
     println(s"[SEARCH] genericSearch called with text='$text', page=$page")
     val offset = (page - 1) * 10

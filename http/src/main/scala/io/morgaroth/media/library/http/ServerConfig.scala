@@ -20,6 +20,7 @@ case class ServerConfig(
   cacheDir: File,
   downloaderExec: String,
   cookiesFile: Option[String],
+  fetchParallelism: Int,
 )
 
 object ServerConfig:
@@ -56,7 +57,10 @@ object ServerConfig:
     // anonymously — fine for most public videos, needed for restricted ones.
     val cookiesFile = opts.str("cookies_file", "MEDIA_LIBRARY_COOKIES_FILE")
 
-    ServerConfig(port, outputDir, videoOutputDir, cacheDir, downloader, cookiesFile)
+    // Max concurrent fetches the orchestrator runs. Default 10.
+    val fetchParallelism = opts.int("fetch_parallelism", "MEDIA_LIBRARY_FETCH_PARALLELISM", 10)
+
+    ServerConfig(port, outputDir, videoOutputDir, cacheDir, downloader, cookiesFile, fetchParallelism)
 
   val fromEnv: ServerConfig = fromOptions(OptionsSource.load())
 

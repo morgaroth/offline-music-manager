@@ -34,6 +34,9 @@ object WebUi:
       |    button { cursor: pointer; }
       |    button.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
       |    button.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+      |    button.icon-btn { padding: .25rem .5rem; font-size: 1rem; line-height: 1; border: 1px solid #8884;
+      |                      background: transparent; border-radius: .4rem; }
+      |    button.icon-btn:hover { background: #8882; }
       |    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
       |    th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8883; vertical-align: top; }
       |    th { position: sticky; top: 0; background: Canvas; }
@@ -48,6 +51,24 @@ object WebUi:
       |    .form-grid input, .form-grid select, .form-grid textarea { width: 100%; }
       |    .actions { margin-top: 1rem; display: flex; gap: .5rem; flex-wrap: wrap; }
       |    .hint { grid-column: 2; font-size: .75rem; opacity: .55; margin-top: -.3rem; }
+      |    .edit-cols { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
+      |    .edit-left { flex: 0 0 auto; }
+      |    .edit-right { flex: 1 1 320px; min-width: 300px; max-width: 440px; }
+      |    .info-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .6rem; }
+      |    .btn-link { display: inline-block; padding: .5rem .6rem; border: 1px solid #8884; border-radius: .4rem;
+      |                text-decoration: none; }
+      |    .thumb { width: 100%; border-radius: .5rem; border: 1px solid #8883; display: block; margin-bottom: .6rem; }
+      |    .meta { font-size: .85rem; line-height: 1.6; margin-bottom: .6rem; }
+      |    .meta .k { opacity: .6; display: inline-block; min-width: 90px; }
+      |    .meta-block { font-size: .82rem; }
+      |    .meta-label { opacity: .6; margin-top: .5rem; }
+      |    .meta-val { font-weight: 600; }
+      |    .meta-desc { white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto;
+      |                 background: #8881; padding: .5rem; border-radius: .4rem; font-size: .78rem; margin: .3rem 0 0; }
+      |    .fq-stats { display: flex; gap: .5rem; flex-wrap: wrap; margin: .5rem 0 1rem; }
+      |    .chip { font-size: .78rem; padding: .15rem .5rem; border-radius: 1rem; border: 1px solid #8884; }
+      |    .chip.pending { background: #94a3b833; } .chip.running { background: #3b82f633; }
+      |    .chip.done { background: #22c55e33; } .chip.errored { background: #ef444433; }
       |  </style>
       |</head>
       |<body>
@@ -55,6 +76,7 @@ object WebUi:
       |  <div class="tabs">
       |    <button class="tab active" data-tab="search" onclick="showTab('search')">Search</button>
       |    <button class="tab" data-tab="edit" onclick="showTab('edit')">Edit</button>
+      |    <button class="tab" data-tab="fetch" onclick="showTab('fetch'); previewFetch(); refreshQueue()">Fetch</button>
       |  </div>
       |  <div id="msg" class="msg"></div>
       |
@@ -82,6 +104,8 @@ object WebUi:
       |  <div id="panel-edit" class="panel">
       |    <div id="editEmpty" class="muted">No track selected. Pick one from the Search tab.</div>
       |    <div id="editForm" style="display:none">
+      |     <div class="edit-cols">
+      |      <div class="edit-left">
       |      <div class="form-grid">
       |        <label>ID</label><input id="f-id" readonly />
       |        <label>URL</label><input id="f-url" />
@@ -112,11 +136,64 @@ object WebUi:
       |        <button onclick="reloadCurrent()">Reload</button>
       |        <button class="danger" onclick="deleteTrack()">Delete</button>
       |      </div>
+      |      </div>
+      |      <!-- Right-side info panel: source preview + metadata to help decide settings -->
+      |      <div class="edit-right">
+      |        <div class="info-actions">
+      |          <a id="i-open" class="btn-link" target="_blank" rel="noopener">↗ Open on YouTube</a>
+      |          <button onclick="loadMeta()">Load YouTube metadata</button>
+      |        </div>
+      |        <a id="i-thumb-link" target="_blank" rel="noopener">
+      |          <img id="i-thumb" class="thumb" alt="" style="display:none" />
+      |        </a>
+      |        <div id="i-meta" class="meta"></div>
+      |        <div class="meta-block">
+      |          <div class="meta-label">Raw title</div>
+      |          <div id="i-rawTitle" class="meta-val"></div>
+      |          <div class="meta-label">Raw description</div>
+      |          <pre id="i-rawDesc" class="meta-desc"></pre>
+      |        </div>
+      |      </div>
+      |     </div>
       |    </div>
+      |  </div>
+      |
+      |  <!-- ===== Fetch tab ===== -->
+      |  <div id="panel-fetch" class="panel">
+      |    <div class="bar">
+      |      <input id="fq-q" placeholder="Filter by name (optional)..." size="28" oninput="previewFetch()" />
+      |      <select id="fq-type" onchange="previewFetch()">
+      |        <option value="">any type</option>
+      |        <option value="music">music</option>
+      |        <option value="video">video</option>
+      |      </select>
+      |      <button class="primary" onclick="enqueueFetch()">Fetch</button>
+      |      <span class="muted">Enqueues matching <b>final</b> tracks.</span>
+      |    </div>
+      |
+      |    <!-- Preview of what the filters match (final tracks are the ones that enqueue). -->
+      |    <div id="fq-preview-head" class="muted" style="margin:.3rem 0"></div>
+      |    <table>
+      |      <thead><tr><th>Title</th><th>Artist</th><th>Type</th><th>Status</th></tr></thead>
+      |      <tbody id="fq-preview"></tbody>
+      |    </table>
+      |
+      |    <h3 style="font-size:1rem;margin:1.5rem 0 .3rem">Progress</h3>
+      |    <div id="fq-stats" class="fq-stats"></div>
+      |    <div class="bar">
+      |      <button onclick="refreshQueue()">Refresh</button>
+      |      <button class="danger" onclick="killPending()">Kill pending</button>
+      |      <button onclick="clearErrored()">Clear errored</button>
+      |    </div>
+      |    <table>
+      |      <thead><tr><th>Title</th><th>Artist</th><th>Type</th><th>Status</th><th>Started</th><th>Error</th></tr></thead>
+      |      <tbody id="fq-rows"></tbody>
+      |    </table>
       |  </div>
       |
       |  <script>
       |    let current = null; // currently edited track
+      |    let queueTimer = null;
       |
       |    const msg = (t, cls) => { const e = document.getElementById('msg'); e.textContent = t; e.className = 'msg ' + (cls || ''); };
       |    const esc = s => (s ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -152,8 +229,8 @@ object WebUi:
       |          '<td>' + esc(t.title) + '</td><td>' + esc(t.artist) + '</td><td>' + esc(t.album) + '</td>' +
       |          '<td>' + (t.type === 'video' ? '🎬' : '🎵') + ' ' + esc(t.type) + '</td>' +
       |          '<td><span class="status">' + esc(t.status) + '</span></td>' +
-      |          '<td><a>edit</a></td>';
-      |        tr.querySelector('a').onclick = () => openEditor(t);
+      |          '<td><button class="icon-btn" title="Edit">✏️</button></td>';
+      |        tr.querySelector('.icon-btn').onclick = () => openEditor(t);
       |        rows.appendChild(tr);
       |      }
       |    }
@@ -189,7 +266,66 @@ object WebUi:
       |      document.getElementById('f-fadeOutSeconds').value = t.fadeOutSeconds ?? '';
       |      document.getElementById('f-volumeChange').value = t.volumeChange ?? '';
       |      document.getElementById('f-playlists').value = (t.playlists || []).join(', ');
+      |      populateInfo(t);
       |      showTab('edit');
+      |    }
+      |
+      |    function youtubeId(url) {
+      |      if (!url) return null;
+      |      const m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+      |      return m ? m[1] : null;
+      |    }
+      |
+      |    function populateInfo(t) {
+      |      const open = document.getElementById('i-open');
+      |      open.href = t.url || '#';
+      |      const vid = youtubeId(t.url);
+      |      const thumb = document.getElementById('i-thumb');
+      |      const thumbLink = document.getElementById('i-thumb-link');
+      |      if (vid) {
+      |        thumb.src = 'https://img.youtube.com/vi/' + vid + '/hqdefault.jpg';
+      |        thumb.style.display = 'block';
+      |        thumbLink.href = t.url;
+      |      } else {
+      |        thumb.style.display = 'none';
+      |      }
+      |      document.getElementById('i-rawTitle').textContent = t.rawTitle || '(none — fetch to populate)';
+      |      document.getElementById('i-rawDesc').textContent = t.rawDescription || '';
+      |      document.getElementById('i-meta').innerHTML = '';
+      |    }
+      |
+      |    async function loadMeta() {
+      |      if (!current) return;
+      |      const el = document.getElementById('i-meta');
+      |      el.innerHTML = '<span class="muted">Loading from YouTube...</span>';
+      |      try {
+      |        const res = await fetch('/tracks/' + current.id + '/metadata');
+      |        if (!res.ok) throw new Error(await res.text());
+      |        const m = await res.json();
+      |        const row = (k, v) => v ? '<div><span class="k">' + k + '</span>' + esc(v) + '</div>' : '';
+      |        el.innerHTML =
+      |          row('Length', m.durationString || (m.durationSeconds ? m.durationSeconds + 's' : '')) +
+      |          row('Uploader', m.uploader) +
+      |          row('Uploaded', m.uploadDate) +
+      |          row('YT title', m.fullTitle || m.title);
+      |        // thumbnail from metadata if the URL-derived one was unavailable
+      |        if (m.thumbnail) {
+      |          const thumb = document.getElementById('i-thumb');
+      |          if (thumb.style.display === 'none') { thumb.src = m.thumbnail; thumb.style.display = 'block'; }
+      |        }
+      |        // The endpoint persisted raw title/description to the DB; refresh the
+      |        // panel's raw fields from the updated track.
+      |        try {
+      |          const tr = await fetch('/tracks/' + current.id);
+      |          if (tr.ok) {
+      |            const t = await tr.json();
+      |            current.rawTitle = t.rawTitle;
+      |            current.rawDescription = t.rawDescription;
+      |            document.getElementById('i-rawTitle').textContent = t.rawTitle || '(none)';
+      |            document.getElementById('i-rawDesc').textContent = t.rawDescription || '';
+      |          }
+      |        } catch (e) { /* panel refresh is best-effort */ }
+      |      } catch (e) { el.innerHTML = '<span class="err">Metadata failed: ' + esc(e.message || e) + '</span>'; }
       |    }
       |
       |    async function reloadCurrent() {
@@ -264,6 +400,108 @@ object WebUi:
       |        else if (job.state === 'succeeded') { msg('Fetch succeeded', 'ok'); }
       |        else { msg('Fetch failed: ' + (job.error || 'unknown'), 'err'); }
       |      } catch (e) { /* stop polling */ }
+      |    }
+      |
+      |    // ---- Fetch queue ----
+      |    let previewTimer = null;
+      |    function previewFetch() {
+      |      // debounce rapid typing
+      |      clearTimeout(previewTimer);
+      |      previewTimer = setTimeout(doPreview, 250);
+      |    }
+      |    async function doPreview() {
+      |      const q = val('fq-q'), type = val('fq-type');
+      |      const params = new URLSearchParams();
+      |      if (q) params.set('q', q);
+      |      try {
+      |        const res = await fetch('/tracks?' + params.toString());
+      |        let tracks = await res.json();
+      |        if (type) tracks = tracks.filter(t => t.type === type);
+      |        const finalCount = tracks.filter(t => t.status === 'final').length;
+      |        document.getElementById('fq-preview-head').innerHTML =
+      |          tracks.length + ' match(es), <b>' + finalCount + ' final</b> will be enqueued';
+      |        const body = document.getElementById('fq-preview');
+      |        body.innerHTML = '';
+      |        for (const t of tracks) {
+      |          const tr = document.createElement('tr');
+      |          if (t.status !== 'final') tr.style.opacity = '.45';
+      |          tr.innerHTML =
+      |            '<td>' + esc(t.title) + '</td><td>' + esc(t.artist) + '</td>' +
+      |            '<td>' + (t.type === 'video' ? '🎬' : '🎵') + ' ' + esc(t.type) + '</td>' +
+      |            '<td><span class="status">' + esc(t.status) + '</span></td>';
+      |          body.appendChild(tr);
+      |        }
+      |      } catch (e) { /* preview is best-effort */ }
+      |    }
+      |
+      |    async function enqueueFetch() {
+      |      const q = val('fq-q'), type = val('fq-type');
+      |      const params = new URLSearchParams();
+      |      if (q) params.set('q', q);
+      |      if (type) params.set('type', type);
+      |      msg('Enqueuing...');
+      |      try {
+      |        const res = await fetch('/fetch-queue?' + params.toString(), { method: 'POST' });
+      |        if (!res.ok) throw new Error(await res.text());
+      |        const r = await res.json();
+      |        msg('Matched ' + r.matched + ' final track(s), added ' + r.added + ' to the queue.', 'ok');
+      |        refreshQueue();
+      |      } catch (e) { msg('Enqueue failed: ' + e, 'err'); }
+      |    }
+      |
+      |    async function refreshQueue() {
+      |      try {
+      |        const res = await fetch('/fetch-queue');
+      |        const data = await res.json();
+      |        renderQueue(data);
+      |        // Poll while there's active work (pending or running).
+      |        clearTimeout(queueTimer);
+      |        if (data.stats.pending > 0 || data.stats.running > 0) {
+      |          queueTimer = setTimeout(refreshQueue, 2000);
+      |        }
+      |      } catch (e) { /* ignore transient errors */ }
+      |    }
+      |
+      |    function renderQueue(data) {
+      |      const s = data.stats;
+      |      document.getElementById('fq-stats').innerHTML =
+      |        '<span class="chip pending">pending ' + s.pending + '</span>' +
+      |        '<span class="chip running">running ' + s.running + '</span>' +
+      |        '<span class="chip done">done ' + s.done + '</span>' +
+      |        '<span class="chip errored">errored ' + s.errored + '</span>' +
+      |        '<span class="chip">total ' + s.total + '</span>';
+      |      const rows = document.getElementById('fq-rows');
+      |      rows.innerHTML = '';
+      |      for (const it of data.items) {
+      |        const tr = document.createElement('tr');
+      |        tr.innerHTML =
+      |          '<td>' + esc(it.title) + '</td>' +
+      |          '<td>' + esc(it.artist) + '</td>' +
+      |          '<td>' + (it.type === 'video' ? '🎬' : '🎵') + ' ' + esc(it.type) + '</td>' +
+      |          '<td><span class="chip ' + esc(it.status) + '">' + esc(it.status) + '</span></td>' +
+      |          '<td class="muted">' + esc(it.startedAt ? it.startedAt.replace("T"," ").slice(0,19) : "") + '</td>' +
+      |          '<td class="err" style="font-size:.75rem">' + esc(it.error || "") + '</td>';
+      |        rows.appendChild(tr);
+      |      }
+      |    }
+      |
+      |    async function killPending() {
+      |      if (!confirm('Remove all pending items? Running fetches will finish.')) return;
+      |      try {
+      |        const res = await fetch('/fetch-queue/pending', { method: 'DELETE' });
+      |        const r = await res.json();
+      |        msg('Removed ' + r.removed + ' pending item(s).', 'ok');
+      |        refreshQueue();
+      |      } catch (e) { msg('Kill failed: ' + e, 'err'); }
+      |    }
+      |
+      |    async function clearErrored() {
+      |      try {
+      |        const res = await fetch('/fetch-queue/errored', { method: 'DELETE' });
+      |        const r = await res.json();
+      |        msg('Cleared ' + r.removed + ' errored item(s).', 'ok');
+      |        refreshQueue();
+      |      } catch (e) { msg('Clear failed: ' + e, 'err'); }
       |    }
       |
       |    search();

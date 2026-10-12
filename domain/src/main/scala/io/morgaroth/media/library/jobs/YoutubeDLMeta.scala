@@ -10,6 +10,11 @@ case class YoutubeDLMeta(
   thumbnail: String,
   fulltitle: String,
   _filename: Option[String],
+  duration: Option[Double] = None,
+  duration_string: Option[String] = None,
+  uploader: Option[String] = None,
+  upload_date: Option[String] = None,
+  webpage_url: Option[String] = None,
 ) derives Decoder
 
 class URLFetchError(title: String, artist: String, album: String, searchUrl: String)
